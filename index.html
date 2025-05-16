@@ -1,249 +1,371 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>Gravity Points Game</title>
+  <meta charset="UTF-8">
+  <title>Gravity Points</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     html, body {
       margin: 0;
       padding: 0;
-      background-color: #18231a;
+      background: #18231a;
       overflow: hidden;
-      height: 100%;
-      touch-action: manipulation;
     }
     canvas {
       display: block;
+    }
+    #ui {
       position: absolute;
       top: 0;
       left: 0;
-    }
-    #buyMenu {
-      position: absolute;
-      right: 10px;
-      top: 10px;
-      background: rgba(255, 255, 255, 0.9);
-      padding: 10px;
-      border-radius: 8px;
-      font-family: Arial, sans-serif;
-      font-size: 14px;
-    }
-    #buyMenu button {
-      display: block;
-      margin-top: 5px;
       width: 100%;
+      color: #f1f1f1;
+      font-family: sans-serif;
+      pointer-events: none;
+    }
+    #ui .top {
+      display: flex;
+      justify-content: space-between;
+      padding: 5px 10px;
+    }
+    #level-display {
+      text-align: center;
+      font-size: 18px;
+    }
+    #buy-menu {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      background: rgba(0,0,0,0.7);
+      display: flex;
+      justify-content: space-around;
+      padding: 5px 0;
+      pointer-events: auto;
+    }
+    .btn {
+      background: #212121;
+      color: #f1f1f1;
+      border: none;
+      padding: 8px 12px;
+      margin: 2px;
+      font-size: 14px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    #shoot-button {
+      position: absolute;
+      bottom: 70px;
+      right: 10px;
+      background: #212121;
+      color: #f1f1f1;
+      padding: 10px;
+      border-radius: 50%;
+      border: none;
+      pointer-events: auto;
+      display: none;
     }
   </style>
 </head>
 <body>
   <canvas id="gameCanvas"></canvas>
-  <div id="buyMenu">
-    <div><strong>Coins:</strong> <span id="coins">9999</span></div>
-    <div><strong>Level:</strong> <span id="level">1</span></div>
-    <button onclick="buyUpgrade('speed')">Buy Speed (+1)</button>
-    <button onclick="buyUpgrade('size')">Buy Size (+2)</button>
-    <button onclick="levelUp()">Level Up (20 coins)</button>
+  <div id="ui">
+    <div class="top">
+      <div>
+        Coins: <span id="coinDisplay">9999</span><br>
+        Orb Value: <span id="orbValueDisplay">1</span>
+      </div>
+      <div id="level-display">Level 1-1</div>
+      <div>
+        HP: <span id="hpDisplay">1</span>
+      </div>
+    </div>
   </div>
+  <div id="buy-menu">
+    <button class="btn" id="buySpeed">Speed (<span id="speedPrice">100</span>)</button>
+    <button class="btn" id="buySize">Size (<span id="sizePrice">100</span>)</button>
+    <button class="btn" id="buyLevel">Level Up (<span id="levelPrice">200</span>)</button>
+    <button class="btn" id="buyHunter">Hunter Mode (<span id="hunterPrice">400</span>)</button>
+  </div>
+  <button id="shoot-button">Shoot</button>
 
   <script>
-    const canvas = document.getElementById('gameCanvas');
-    const ctx = canvas.getContext('2d');
-
+    // Game constants
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
     let width = window.innerWidth;
     let height = window.innerHeight;
     canvas.width = width;
     canvas.height = height;
 
-    window.addEventListener('resize', () => {
-      width = window.innerWidth;
-      height = window.innerHeight;
-      canvas.width = width;
-      canvas.height = height;
-    });
+    // UI Elements
+    const coinDisplay = document.getElementById("coinDisplay");
+    const orbValueDisplay = document.getElementById("orbValueDisplay");
+    const hpDisplay = document.getElementById("hpDisplay");
+    const levelDisplay = document.getElementById("level-display");
+    const shootButton = document.getElementById("shoot-button");
 
-    const safeMargin = 50;
-
+    // Player state
     const player = {
       x: width / 2,
       y: height / 2,
-      radius: 8,
-      color: '#ffffff',
+      radius: 10,
+      color: "#ffffff",
       speed: 3,
-      target: { x: width / 2, y: height / 2 }
+      target: { x: width / 2, y: height / 2 },
+      hp: 1,
+      hasHunter: false,
+      canShoot: false,
+      aimDir: { x: 0, y: 0 }
     };
 
-    const enemy = {
-      x: Math.random() * width,
-      y: Math.random() * height,
-      radius: 20,
-      color: '#ed6c4e',
-      speed: 1.2
-    };
-
-    let score = 0;
+    // Game state
     let coins = 9999;
+    let orbValue = 1;
     let level = 1;
-    let speedPrice = 10;
-    let sizePrice = 10;
-    let startTime = Date.now();
-    const gravityPoints = [];
-    const totalPoints = 10;
+    let subLevel = 1;
+    let gravityPoints = [];
+    let enemies = [];
+    let shot = null;
+
+    const PRICES = {
+      speed: 100,
+      size: 100,
+      level: 200,
+      hunter: 400
+    };
+
+    const MAX_LEVEL = 10;
+    const SUB_LEVELS = 10;
 
     function updateUI() {
-      document.getElementById('coins').textContent = coins;
-      document.getElementById('level').textContent = level;
+      coinDisplay.textContent = coins;
+      orbValueDisplay.textContent = orbValue;
+      hpDisplay.textContent = player.hp;
+      levelDisplay.textContent = `Level ${level}-${subLevel}`;
+      document.getElementById("speedPrice").textContent = PRICES.speed;
+      document.getElementById("sizePrice").textContent = PRICES.size;
+      document.getElementById("levelPrice").textContent = PRICES.level;
+      document.getElementById("hunterPrice").textContent = PRICES.hunter;
+      shootButton.style.display = player.hasHunter ? "block" : "none";
     }
 
-    function spawnPoints() {
-      gravityPoints.length = 0;
-      for (let i = 0; i < totalPoints; i++) {
+    function spawnOrbs() {
+      gravityPoints = [];
+      const count = 10 + level - 1;
+      for (let i = 0; i < count; i++) {
         gravityPoints.push({
-          x: safeMargin + Math.random() * (width - 2 * safeMargin),
-          y: safeMargin + Math.random() * (height - 2 * safeMargin),
-          radius: 12,
-          color: '#d2de26',
-          dx: 0,
-          dy: 0
+          x: Math.random() * width * 0.8 + width * 0.1,
+          y: Math.random() * height * 0.8 + height * 0.1,
+          radius: 10,
+          color: "#d2de26"
         });
       }
     }
 
-    function buyUpgrade(type) {
-      if (type === 'speed' && coins >= speedPrice) {
-        coins -= speedPrice;
-        player.speed += 1;
-        speedPrice *= 2;
-      } else if (type === 'size' && coins >= sizePrice) {
-        coins -= sizePrice;
-        player.radius += 2;
-        sizePrice *= 2;
+    function spawnEnemies() {
+      enemies = [];
+      if (level >= 2) enemies.push(newEnemy());
+      if (level >= 5) enemies.push(newEnemy());
+      if (level === 10) enemies.push(newEnemy(true));
+    }
+
+    function newEnemy(big = false) {
+      return {
+        x: Math.random() * width,
+        y: Math.random() * height,
+        radius: big ? 30 : 20,
+        speed: 1 + level * 0.2,
+        color: big ? "#cc2222" : "#ed6c4e"
+      };
+    }
+
+    function nextSubLevel() {
+      subLevel++;
+      if (subLevel > SUB_LEVELS) {
+        subLevel = 1;
+        level++;
+        orbValue *= 2;
+        if (level > MAX_LEVEL) {
+          winGame();
+          return;
+        }
+      } else if (orbValue < 10) {
+        orbValue += 1;
       }
+      player.canShoot = true;
+      spawnOrbs();
+      spawnEnemies();
       updateUI();
     }
 
-    function levelUp() {
-      if (coins >= 20) {
-        coins -= 20;
-        level++;
-        updateUI();
-      }
+    function winGame() {
+      alert("You win! AI takes over.");
     }
 
-    function moveOrbsAwayFromPlayer(orb) {
-      const dx = orb.x - player.x;
-      const dy = orb.y - player.y;
-      const dist = Math.hypot(dx, dy);
-      if (dist === 0) return;
-      let moveSpeed = level >= 3 ? 0.5 : 1.5;
-      orb.x += (dx / dist) * moveSpeed;
-      orb.y += (dy / dist) * moveSpeed;
-
-      // Stay away from edges
-      if (orb.x < safeMargin) orb.x = safeMargin;
-      if (orb.x > width - safeMargin) orb.x = width - safeMargin;
-      if (orb.y < safeMargin) orb.y = safeMargin;
-      if (orb.y > height - safeMargin) orb.y = height - safeMargin;
-
-      // Optional: orbit around center to simulate animal-like behavior
-      const centerX = width / 2;
-      const centerY = height / 2;
-      const cx = centerX - orb.x;
-      const cy = centerY - orb.y;
-      const orbitDist = Math.hypot(cx, cy);
-      orb.x += (cy / orbitDist) * 0.3;
-      orb.y -= (cx / orbitDist) * 0.3;
+    function drawCircle(x, y, r, color) {
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
     }
 
-    spawnPoints();
-    updateUI();
-
-    window.addEventListener('click', (e) => {
-      player.target.x = e.clientX;
-      player.target.y = e.clientY;
-    });
-
-    window.addEventListener('touchstart', (e) => {
-      const touch = e.touches[0];
-      player.target.x = touch.clientX;
-      player.target.y = touch.clientY;
-    });
-
-    function update() {
+    function updateGame() {
       // Move player
       const dx = player.target.x - player.x;
       const dy = player.target.y - player.y;
       const dist = Math.hypot(dx, dy);
       if (dist > player.speed) {
-        player.x += (dx / dist) * player.speed;
-        player.y += (dy / dist) * player.speed;
+        player.aimDir = { x: dx / dist, y: dy / dist };
+        player.x += player.aimDir.x * player.speed;
+        player.y += player.aimDir.y * player.speed;
       }
 
-      // Move enemy
-      const edx = player.x - enemy.x;
-      const edy = player.y - enemy.y;
-      const edist = Math.hypot(edx, edy);
-      if (edist > 1) {
-        enemy.x += (edx / edist) * enemy.speed;
-        enemy.y += (edy / edist) * enemy.speed;
-      }
-
-      // Points behavior
-      for (let i = gravityPoints.length - 1; i >= 0; i--) {
-        const p = gravityPoints[i];
-        if (level >= 2) {
-          moveOrbsAwayFromPlayer(p);
+      // Move orbs away from player
+      for (let orb of gravityPoints) {
+        const odx = orb.x - player.x;
+        const ody = orb.y - player.y;
+        const oDist = Math.hypot(odx, ody);
+        const fleeSpeed = level >= 4 ? 1.5 : 0.5;
+        if (oDist < 200) {
+          orb.x += (odx / oDist) * fleeSpeed;
+          orb.y += (ody / oDist) * fleeSpeed;
         }
-        const pdx = p.x - player.x;
-        const pdy = p.y - player.y;
-        if (Math.hypot(pdx, pdy) < p.radius + player.radius) {
+      }
+
+      // Check orb collection
+      for (let i = gravityPoints.length - 1; i >= 0; i--) {
+        let orb = gravityPoints[i];
+        if (Math.hypot(orb.x - player.x, orb.y - player.y) < orb.radius + player.radius) {
           gravityPoints.splice(i, 1);
-          score++;
-          coins += (level >= 2 ? 2 : 1);
+          coins += orbValue;
           updateUI();
         }
       }
 
+      // Check level clear
       if (gravityPoints.length === 0) {
-        spawnPoints();
+        nextSubLevel();
       }
 
-      if (Math.hypot(player.x - enemy.x, player.y - enemy.y) < enemy.radius + player.radius) {
-        score = Math.max(0, score - 1);
-        coins = Math.max(0, coins - 5);
-        enemy.x += (Math.random() - 0.5) * 100;
-        enemy.y += (Math.random() - 0.5) * 100;
-        updateUI();
+      // Move enemies
+      for (let enemy of enemies) {
+        const edx = player.x - enemy.x;
+        const edy = player.y - enemy.y;
+        const eDist = Math.hypot(edx, edy);
+        if (eDist > 1) {
+          enemy.x += (edx / eDist) * enemy.speed;
+          enemy.y += (edy / eDist) * enemy.speed;
+        }
+
+        if (eDist < enemy.radius + player.radius) {
+          if (player.hp > 0) {
+            player.hp--;
+            player.radius = 10 + player.hp * 2;
+            updateUI();
+          } else {
+            alert("Game Over!");
+            window.location.reload();
+          }
+        }
+      }
+
+      // Move shot
+      if (shot) {
+        shot.x += shot.dx;
+        shot.y += shot.dy;
+        for (let i = enemies.length - 1; i >= 0; i--) {
+          if (Math.hypot(shot.x - enemies[i].x, shot.y - enemies[i].y) < enemies[i].radius) {
+            enemies.splice(i, 1);
+            shot = null;
+            player.canShoot = true;
+            break;
+          }
+        }
+        if (shot && (shot.x < 0 || shot.x > width || shot.y < 0 || shot.y > height)) {
+          shot = null;
+        }
       }
     }
 
-    function drawCircle(x, y, radius, color) {
-      ctx.beginPath();
-      ctx.arc(x, y, radius, 0, Math.PI * 2);
-      ctx.fillStyle = color;
-      ctx.fill();
-    }
-
-    function draw() {
+    function drawGame() {
       ctx.clearRect(0, 0, width, height);
-      gravityPoints.forEach(p => drawCircle(p.x, p.y, p.radius, p.color));
-      drawCircle(enemy.x, enemy.y, enemy.radius, enemy.color);
+      for (let orb of gravityPoints) drawCircle(orb.x, orb.y, orb.radius, orb.color);
+      for (let enemy of enemies) drawCircle(enemy.x, enemy.y, enemy.radius, enemy.color);
+      if (player.hasHunter) {
+        ctx.beginPath();
+        ctx.moveTo(player.x, player.y);
+        ctx.lineTo(player.x + player.aimDir.x * 30, player.y + player.aimDir.y * 30);
+        ctx.strokeStyle = "#00ffff";
+        ctx.stroke();
+      }
       drawCircle(player.x, player.y, player.radius, player.color);
-
-      // HUD
-      ctx.fillStyle = '#ffffff';
-      ctx.font = '18px Arial';
-      ctx.fillText(`Score: ${score}`, 20, 30);
-      const seconds = Math.floor((Date.now() - startTime) / 1000);
-      ctx.fillText(`Time: ${seconds}s`, 20, 60);
+      if (shot) drawCircle(shot.x, shot.y, 5, "#000000");
     }
 
     function loop() {
-      update();
-      draw();
+      updateGame();
+      drawGame();
       requestAnimationFrame(loop);
     }
 
+    window.addEventListener("click", (e) => {
+      player.target = { x: e.clientX, y: e.clientY };
+    });
+
+    shootButton.addEventListener("click", () => {
+      if (player.canShoot && player.hasHunter) {
+        player.canShoot = false;
+        shot = {
+          x: player.x,
+          y: player.y,
+          dx: player.aimDir.x * 6,
+          dy: player.aimDir.y * 6
+        };
+      }
+    });
+
+    document.getElementById("buySpeed").addEventListener("click", () => {
+      if (coins >= PRICES.speed) {
+        coins -= PRICES.speed;
+        player.speed += 0.5;
+        PRICES.speed = Math.floor(PRICES.speed * 1.5);
+        updateUI();
+      }
+    });
+
+    document.getElementById("buySize").addEventListener("click", () => {
+      if (coins >= PRICES.size) {
+        coins -= PRICES.size;
+        player.hp++;
+        player.radius = 10 + player.hp * 2;
+        PRICES.size = Math.floor(PRICES.size * 1.5);
+        updateUI();
+      }
+    });
+
+    document.getElementById("buyLevel").addEventListener("click", () => {
+      if (coins >= PRICES.level && level < MAX_LEVEL) {
+        coins -= PRICES.level;
+        subLevel = 0;
+        nextSubLevel();
+        PRICES.level = Math.floor(PRICES.level * 2);
+        updateUI();
+      }
+    });
+
+    document.getElementById("buyHunter").addEventListener("click", () => {
+      if (!player.hasHunter && coins >= PRICES.hunter && level >= 5) {
+        coins -= PRICES.hunter;
+        player.hasHunter = true;
+        PRICES.hunter = Math.floor(PRICES.hunter * 2);
+        updateUI();
+      }
+    });
+
+    spawnOrbs();
+    spawnEnemies();
+    updateUI();
     loop();
   </script>
 </body>
