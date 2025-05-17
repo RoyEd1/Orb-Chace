@@ -1,250 +1,315 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>Gravity Points Game</title>
-  <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      background-color: #18231a;
-      overflow: hidden;
-      height: 100%;
-      touch-action: manipulation;
-    }
-    canvas {
-      display: block;
-      position: absolute;
-      top: 0;
-      left: 0;
-    }
-    #buyMenu {
-      position: absolute;
-      right: 10px;
-      top: 10px;
-      background: rgba(255, 255, 255, 0.9);
-      padding: 10px;
-      border-radius: 8px;
-      font-family: Arial, sans-serif;
-      font-size: 14px;
-    }
-    #buyMenu button {
-      display: block;
-      margin-top: 5px;
-      width: 100%;
-    }
-  </style>
+<title>Gravity Points</title>
+<style>
+  body { margin: 0; overflow: hidden; background-color: #333; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+  canvas { background-color: #222; display: block; }
+  .hud { position: absolute; top: 10px; left: 10px; color: #f1f1f1; font-family: sans-serif; font-size: 16px; }
+  .level-display { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); color: #f1f1f1; font-family: sans-serif; font-size: 16px; }
+  .hp-display { position: absolute; top: 10px; right: 10px; color: #f1f1f1; font-family: sans-serif; font-size: 16px; }
+  .upgrade-dock { position: absolute; bottom: 0; left: 0; width: 100%; background-color: #444; padding: 10px; display: flex; justify-content: space-around; align-items: center; box-sizing: border-box; }
+  .upgrade-button { background-color: #212121; color: #f1f1f1; border: none; padding: 10px 15px; cursor: pointer; font-family: sans-serif; font-size: 14px; border-radius: 5px; }
+</style>
 </head>
 <body>
   <canvas id="gameCanvas"></canvas>
-  <div id="buyMenu">
-    <div><strong>Coins:</strong> <span id="coins">9999</span></div>
-    <div><strong>Level:</strong> <span id="level">1</span></div>
-    <button onclick="buyUpgrade('speed')">Buy Speed (+1)</button>
-    <button onclick="buyUpgrade('size')">Buy Size (+2)</button>
-    <button onclick="levelUp()">Level Up (20 coins)</button>
+  <div class="hud" id="hud">Coins: <span id="coins">0</span><br>Coin/Orb: +<span id="coinPerOrb">1</span></div>
+  <div class="level-display" id="levelDisplay">Level <span id="level">1</span>-<span id="subLevel">1</span></div>
+  <div class="hp-display" id="hpDisplay">HP: <span id="hp">1</span></div>
+  <div class="upgrade-dock" id="upgradeDock">
+    <button id="speedUpgradeBtn" class="upgrade-button">Speed (Cost: <span id="speedCost">10</span>)</button>
+    <button id="sizeUpgradeBtn" class="upgrade-button">Size (Cost: <span id="sizeCost">15</span>)</button>
+    <button id="levelUpBtn" class="upgrade-button">Level Up (Cost: <span id="levelUpCost">20</span>)</button>
   </div>
 
   <script>
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
-
     let width = window.innerWidth;
     let height = window.innerHeight;
     canvas.width = width;
     canvas.height = height;
+
+    const hudElement = document.getElementById('hud');
+    const upgradeDockElement = document.getElementById('upgradeDock');
+    const hudHeight = hudElement.offsetHeight + 20; // Add some padding
+    const dockHeight = upgradeDockElement.offsetHeight + 10; // Add some padding
+    const playableTop = hudHeight;
+    const playableBottom = height - dockHeight;
+
+    let player = { x: width / 2, y: (playableTop + playableBottom) / 2, radius: 10, speed: 3, target: null, hp: 1, maxHp: 1 };
+    let enemies = [];
+    let orbs = [];
+    let coins = 0;
+    let level = 1;
+    let subLevel = 1;
+    let coinPerOrb = 1;
+    let speedUpgradeCost = 10;
+    let sizeUpgradeCost = 15;
+    let levelUpCost = 20;
+    const orbCount = 10;
+    let sizeUpgradeCosts = [15]; // Track individual size upgrade costs
+
+    function getRandomPos(radius = 0) {
+      return {
+        x: Math.random() * (width - 2 * radius) + radius,
+        y: Math.random() * (playableBottom - playableTop - 2 * radius) + playableTop + radius
+      };
+    }
+
+    function createOrb() {
+      let pos = getRandomPos(8);
+      // Ensure orbs don't spawn too close to the player initially
+      while (Math.sqrt(Math.pow(pos.x - player.x, 2) + Math.pow(pos.y - player.y, 2)) < player.radius + 20) {
+        pos = getRandomPos(8);
+      }
+      orbs.push({ ...pos, radius: 8 });
+    }
+
+    function createEnemy() {
+      let pos = {
+        x: Math.random() * (width - 24) + 12,
+        y: Math.random() * (playableBottom - playableTop - 24) + playableTop + 12
+      };
+      enemies.push({ ...pos, radius: 12, speed: 1 + (level - 1) * 0.2 });
+    }
+
+    function resetOrbs() {
+      orbs = [];
+      for (let i = 0; i < orbCount; i++) {
+        let pos = getRandomPos(8);
+        // Ensure orbs are within the playable area and not too close to the player
+        while (pos.x < 20 || pos.x > width - 20 || pos.y < playableTop + 20 || pos.y > playableBottom - 20 ||
+               Math.sqrt(Math.pow(pos.x - player.x, 2) + Math.pow(pos.y - player.y, 2)) < player.radius + 20) {
+          pos = getRandomPos(8);
+        }
+        orbs.push({ ...pos, radius: 8 });
+      }
+    }
+
+    function resetGame() {
+      player = { x: width / 2, y: (playableTop + playableBottom) / 2, radius: 10, speed: 3, target: null, hp: 1, maxHp: 1 };
+      enemies = [];
+      coins = 0;
+      level = 1;
+      subLevel = 1;
+      coinPerOrb = 1;
+      speedUpgradeCost = 10;
+      sizeUpgradeCost = 15;
+      levelUpCost = 20;
+      sizeUpgradeCosts = [15];
+      for (let i = 0; i < level; i++) {
+        createEnemy();
+      }
+      resetOrbs();
+      updateHUD();
+    }
+
+    function updateHUD() {
+      document.getElementById('coins').textContent = coins;
+      document.getElementById('coinPerOrb').textContent = coinPerOrb;
+      document.getElementById('level').textContent = level;
+      document.getElementById('subLevel').textContent = subLevel;
+      document.getElementById('hp').textContent = player.hp;
+      document.getElementById('speedCost').textContent = speedUpgradeCost;
+      document.getElementById('sizeCost').textContent = sizeUpgradeCost;
+      document.getElementById('levelUpCost').textContent = levelUpCost;
+    }
+
+    function movePlayer() {
+      if (player.target) {
+        const dx = player.target.x - player.x;
+        const dy = player.target.y - player.y;
+        const angle = Math.atan2(dy, dx);
+        const vx = Math.cos(angle) * player.speed;
+        const vy = Math.sin(angle) * player.speed;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < player.speed) {
+          player.x = player.target.x;
+          player.y = player.target.y;
+          player.target = null;
+        } else {
+          player.x += vx;
+          player.y += vy;
+        }
+      }
+
+      // Keep player within bounds
+      player.y = Math.max(playableTop + player.radius, Math.min(playableBottom - player.radius, player.y));
+      player.x = Math.max(player.radius, Math.min(width - player.radius, player.x));
+    }
+
+    function moveEnemies() {
+      enemies.forEach(enemy => {
+        const dx = player.x - enemy.x;
+        const dy = player.y - enemy.y;
+        const angle = Math.atan2(dy, dx);
+        enemy.x += Math.cos(angle) * enemy.speed;
+        enemy.y += Math.sin(angle) * enemy.speed;
+
+        // Keep enemies within bounds (optional)
+        enemy.y = Math.max(playableTop + enemy.radius, Math.min(playableBottom - enemy.radius, enemy.y));
+        enemy.x = Math.max(enemy.radius, Math.min(width - enemy.radius, enemy.x));
+      });
+    }
+
+    function updateOrbs() {
+      orbs.forEach(orb => {
+        const dx = orb.x - player.x;
+        const dy = orb.y - player.y;
+        const angle = Math.atan2(dy, dx);
+        const orbSpeed = 0.5 + (level - 1) * 0.1; // Increase orb speed with level
+        orb.x += Math.cos(angle) * orbSpeed;
+        orb.y += Math.sin(angle) * orbSpeed;
+
+        // Keep orbs within bounds during movement
+        orb.y = Math.max(playableTop + orb.radius, Math.min(playableBottom - orb.radius, orb.y));
+        orb.x = Math.max(orb.radius, Math.min(width - orb.radius, orb.x));
+      });
+    }
+
+    function checkCollisions() {
+      // Orb collection
+      for (let i = orbs.length - 1; i >= 0; i--) {
+        const dx = player.x - orbs[i].x;
+        const dy = player.y - orbs[i].y;
+        const distSq = dx * dx + dy * dy;
+        const radiiSumSq = (player.radius + orbs[i].radius) * (player.radius + orbs[i].radius);
+        if (distSq < radiiSumSq) {
+          coins += coinPerOrb;
+          orbs.splice(i, 1);
+          updateHUD();
+        }
+      }
+
+      // Reset orbs if none are left
+      if (orbs.length === 0) {
+        subLevel++;
+        coinPerOrb++;
+        resetOrbs();
+      }
+
+      // Enemy collision
+      for (let i = 0; i < enemies.length; i++) {
+        const dx = player.x - enemies[i].x;
+        const dy = player.y - enemies[i].y;
+        const distSq = dx * dx + dy * dy;
+        const radiiSumSq = (player.radius + enemies[i].radius) * (player.radius + enemies[i].radius);
+        if (distSq < radiiSumSq) {
+          if (player.hp > 0) {
+            player.hp--;
+            player.radius = Math.max(10, player.radius - 2); // Visually represent HP loss
+          } else {
+            coins = Math.max(0, coins - 5);
+          }
+          let newPos = {
+            x: Math.random() * (width - 24) + 12,
+            y: Math.random() * (playableBottom - playableTop - 24) + playableTop + 12
+          };
+          enemies[i].x = newPos.x;
+          enemies[i].y = newPos.y;
+          updateHUD();
+        }
+      }
+    }
+
+    function gameLoop() {
+      ctx.clearRect(0, 0, width, height);
+
+      // Draw player
+      ctx.fillStyle = 'white';
+      ctx.beginPath();
+      ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Draw enemies
+      ctx.fillStyle = 'orange';
+      enemies.forEach(enemy => {
+        ctx.beginPath();
+        ctx.arc(enemy.x, enemy.y, enemy.radius, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // Draw orbs
+      ctx.fillStyle = 'green';
+      orbs.forEach(orb => {
+        ctx.beginPath();
+        ctx.arc(orb.x, orb.y, orb.radius, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      movePlayer();
+      moveEnemies();
+      updateOrbs();
+      checkCollisions();
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    function handleInput(e) {
+      const rect = canvas.getBoundingClientRect();
+      player.target = {
+        x: (e.clientX || e.touches[0].clientX) - rect.left,
+        y: (e.clientY || e.touches[0].clientY) - rect.top
+      };
+    }
 
     window.addEventListener('resize', () => {
       width = window.innerWidth;
       height = window.innerHeight;
       canvas.width = width;
       canvas.height = height;
+
+      // Recalculate playable area on resize
+      const newHudHeight = hudElement.offsetHeight + 20;
+      const newDockHeight = upgradeDockElement.offsetHeight + 10;
+      playableTop = newHudHeight;
+      playableBottom = height - newDockHeight;
+
+      // Ensure player stays within new bounds
+      player.y = Math.max(playableTop + player.radius, Math.min(playableBottom - player.radius, player.y));
+      resetOrbs(); // Reset orb positions to be within new bounds
     });
 
-    const safeMargin = 50;
+    canvas.addEventListener('mousedown', handleInput);
+    canvas.addEventListener('touchstart', handleInput);
 
-    const player = {
-      x: width / 2,
-      y: height / 2,
-      radius: 8,
-      color: '#ffffff',
-      speed: 3,
-      target: { x: width / 2, y: height / 2 }
-    };
-
-    const enemy = {
-      x: Math.random() * width,
-      y: Math.random() * height,
-      radius: 20,
-      color: '#ed6c4e',
-      speed: 1.2
-    };
-
-    let score = 0;
-    let coins = 9999;
-    let level = 1;
-    let speedPrice = 10;
-    let sizePrice = 10;
-    let startTime = Date.now();
-    const gravityPoints = [];
-    const totalPoints = 10;
-
-    function updateUI() {
-      document.getElementById('coins').textContent = coins;
-      document.getElementById('level').textContent = level;
-    }
-
-    function spawnPoints() {
-      gravityPoints.length = 0;
-      for (let i = 0; i < totalPoints; i++) {
-        gravityPoints.push({
-          x: safeMargin + Math.random() * (width - 2 * safeMargin),
-          y: safeMargin + Math.random() * (height - 2 * safeMargin),
-          radius: 12,
-          color: '#d2de26',
-          dx: 0,
-          dy: 0
-        });
+    document.getElementById('speedUpgradeBtn').addEventListener('click', () => {
+      if (coins >= speedUpgradeCost) {
+        coins -= speedUpgradeCost;
+        player.speed += 0.5;
+        speedUpgradeCost = Math.round(speedUpgradeCost * 1.5);
+        updateHUD();
       }
-    }
+    });
 
-    function buyUpgrade(type) {
-      if (type === 'speed' && coins >= speedPrice) {
-        coins -= speedPrice;
-        player.speed += 1;
-        speedPrice *= 2;
-      } else if (type === 'size' && coins >= sizePrice) {
-        coins -= sizePrice;
+    document.getElementById('sizeUpgradeBtn').addEventListener('click', () => {
+      if (coins >= sizeUpgradeCost) {
+        coins -= sizeUpgradeCost;
         player.radius += 2;
-        sizePrice *= 2;
+        player.hp++;
+        player.maxHp++;
+        sizeUpgradeCosts.push(Math.round(sizeUpgradeCost * 1.6));
+        sizeUpgradeCost = sizeUpgradeCosts[sizeUpgradeCosts.length - 1];
+        updateHUD();
       }
-      updateUI();
-    }
+    });
 
-    function levelUp() {
-      if (coins >= 20) {
-        coins -= 20;
+    document.getElementById('levelUpBtn').addEventListener('click', () => {
+      if (coins >= levelUpCost && level < 10) {
+        coins -= levelUpCost;
         level++;
-        updateUI();
+        subLevel = 1;
+        coinPerOrb *= 2;
+        createEnemy();
+        levelUpCost = 20 * level;
+        updateHUD();
       }
-    }
-
-    function moveOrbsAwayFromPlayer(orb) {
-      const dx = orb.x - player.x;
-      const dy = orb.y - player.y;
-      const dist = Math.hypot(dx, dy);
-      if (dist === 0) return;
-      let moveSpeed = level >= 3 ? 0.5 : 1.5;
-      orb.x += (dx / dist) * moveSpeed;
-      orb.y += (dy / dist) * moveSpeed;
-
-      // Stay away from edges
-      if (orb.x < safeMargin) orb.x = safeMargin;
-      if (orb.x > width - safeMargin) orb.x = width - safeMargin;
-      if (orb.y < safeMargin) orb.y = safeMargin;
-      if (orb.y > height - safeMargin) orb.y = height - safeMargin;
-
-      // Optional: orbit around center to simulate animal-like behavior
-      const centerX = width / 2;
-      const centerY = height / 2;
-      const cx = centerX - orb.x;
-      const cy = centerY - orb.y;
-      const orbitDist = Math.hypot(cx, cy);
-      orb.x += (cy / orbitDist) * 0.3;
-      orb.y -= (cx / orbitDist) * 0.3;
-    }
-
-    spawnPoints();
-    updateUI();
-
-    window.addEventListener('click', (e) => {
-      player.target.x = e.clientX;
-      player.target.y = e.clientY;
     });
 
-    window.addEventListener('touchstart', (e) => {
-      const touch = e.touches[0];
-      player.target.x = touch.clientX;
-      player.target.y = touch.clientY;
-    });
-
-    function update() {
-      // Move player
-      const dx = player.target.x - player.x;
-      const dy = player.target.y - player.y;
-      const dist = Math.hypot(dx, dy);
-      if (dist > player.speed) {
-        player.x += (dx / dist) * player.speed;
-        player.y += (dy / dist) * player.speed;
-      }
-
-      // Move enemy
-      const edx = player.x - enemy.x;
-      const edy = player.y - enemy.y;
-      const edist = Math.hypot(edx, edy);
-      if (edist > 1) {
-        enemy.x += (edx / edist) * enemy.speed;
-        enemy.y += (edy / edist) * enemy.speed;
-      }
-
-      // Points behavior
-      for (let i = gravityPoints.length - 1; i >= 0; i--) {
-        const p = gravityPoints[i];
-        if (level >= 2) {
-          moveOrbsAwayFromPlayer(p);
-        }
-        const pdx = p.x - player.x;
-        const pdy = p.y - player.y;
-        if (Math.hypot(pdx, pdy) < p.radius + player.radius) {
-          gravityPoints.splice(i, 1);
-          score++;
-          coins += (level >= 2 ? 2 : 1);
-          updateUI();
-        }
-      }
-
-      if (gravityPoints.length === 0) {
-        spawnPoints();
-      }
-
-      if (Math.hypot(player.x - enemy.x, player.y - enemy.y) < enemy.radius + player.radius) {
-        score = Math.max(0, score - 1);
-        coins = Math.max(0, coins - 5);
-        enemy.x += (Math.random() - 0.5) * 100;
-        enemy.y += (Math.random() - 0.5) * 100;
-        updateUI();
-      }
-    }
-
-    function drawCircle(x, y, radius, color) {
-      ctx.beginPath();
-      ctx.arc(x, y, radius, 0, Math.PI * 2);
-      ctx.fillStyle = color;
-      ctx.fill();
-    }
-
-    function draw() {
-      ctx.clearRect(0, 0, width, height);
-      gravityPoints.forEach(p => drawCircle(p.x, p.y, p.radius, p.color));
-      drawCircle(enemy.x, enemy.y, enemy.radius, enemy.color);
-      drawCircle(player.x, player.y, player.radius, player.color);
-
-      // HUD
-      ctx.fillStyle = '#ffffff';
-      ctx.font = '18px Arial';
-      ctx.fillText(`Score: ${score}`, 20, 30);
-      const seconds = Math.floor((Date.now() - startTime) / 1000);
-      ctx.fillText(`Time: ${seconds}s`, 20, 60);
-    }
-
-    function loop() {
-      update();
-      draw();
-      requestAnimationFrame(loop);
-    }
-
-    loop();
+    resetGame();
+    gameLoop();
   </script>
 </body>
 </html>
