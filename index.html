@@ -1,337 +1,265 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Gravity Points</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Chicken Treadmill Invaders</title>
 <style>
-  body { margin: 0; overflow: hidden; background-color: #333; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
-  canvas { background-color: #222; display: block; }
-  .hud { position: absolute; top: 10px; left: 10px; color: #f1f1f1; font-family: sans-serif; font-size: 16px; }
-  .level-display { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); color: #f1f1f1; font-family: sans-serif; font-size: 16px; }
-  .hp-display { position: absolute; top: 10px; right: 10px; color: #f1f1f1; font-family: sans-serif; font-size: 16px; }
-  .upgrade-dock { position: absolute; bottom: 0; left: 0; width: 100%; background-color: #444; padding: 10px; display: flex; justify-content: space-around; align-items: center; box-sizing: border-box; }
-  .upgrade-button { background-color: #212121; color: #f1f1f1; border: none; padding: 10px 15px; cursor: pointer; font-family: sans-serif; font-size: 14px; border-radius: 5px; }
+  body { margin: 0; overflow: hidden; background-color: #f0e68c; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+  canvas { background-color: #228b22; display: block; }
 </style>
 </head>
 <body>
   <canvas id="gameCanvas"></canvas>
-  <div class="hud" id="hud">Coins: <span id="coins">0</span><br>Coin/Orb: +<span id="coinPerOrb">1</span></div>
-  <div class="level-display" id="levelDisplay">Level <span id="level">1</span>-<span id="subLevel">1</span></div>
-  <div class="hp-display" id="hpDisplay">HP: <span id="hp">1</span></div>
-  <div class="upgrade-dock" id="upgradeDock">
-    <button id="speedUpgradeBtn" class="upgrade-button">Speed (Cost: <span id="speedCost">10</span>)</button>
-    <button id="sizeUpgradeBtn" class="upgrade-button">Size (Cost: <span id="sizeCost">15</span>)</button>
-    <button id="levelUpBtn" class="upgrade-button">Level Up (Cost: <span id="levelUpCost">20</span>)</button>
-  </div>
 
   <script>
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
-    let width = window.innerWidth;
-    let height = window.innerHeight;
-    let scaleFactor = 1;
 
-    const hudElement = document.getElementById('hud');
-    const upgradeDockElement = document.getElementById('upgradeDock');
-    let hudHeight = 0;
-    let dockHeight = 0;
-    let playableTop = 0;
-    let playableBottom = 0;
-
-    let player = { x: width / 2, y: height / 2, radius: 10, speed: 3, target: null, hp: 1, maxHp: 1 };
+    let gameWidth;
+    let gameHeight;
+    let player;
+    let bullets = [];
     let enemies = [];
-    let orbs = [];
-    let coins = 0;
-    let level = 1;
-    let subLevel = 1;
-    let coinPerOrb = 1;
-    let speedUpgradeCost = 10;
-    let sizeUpgradeCost = 15;
-    let levelUpCost = 20;
-    const orbCount = 10;
-    let sizeUpgradeCosts = [15]; // Track individual size upgrade costs
+    let score = 0;
+    let gameInterval;
+    let lastShotTime = 0;
+    const playerSpeed = 5;
+    const bulletSpeed = -10;
+    const playerWidth = 50;
+    const playerHeight = 30;
+    const bulletRadius = 5;
+    const playerColor = 'blue';
+    const bulletColor = 'yellow';
+    const enemyWidth = 40;
+    const enemyHeight = 30;
+    const enemyColor = 'red';
+    let enemySpeed = 1;
+    let wave = 1;
+    let lastWaveIncreaseTime = 0;
+    const waveIncreaseInterval = 30000; // 30 seconds
+    let isGameOver = false;
+    let touchStartX = null;
 
     function resizeCanvas() {
-      width = window.innerWidth;
-      height = window.innerHeight;
-      canvas.width = width;
-      canvas.height = height;
-
-      // Calculate scale factor (adjust as needed)
-      scaleFactor = Math.min(width / 600, height / 800); // Example: Scale based on a base resolution
-
-      // Update UI element font sizes and padding based on scale
-      const baseFontSize = 16;
-      const basePadding = 10;
-      const scaledFontSize = Math.round(baseFontSize * scaleFactor);
-      const scaledPadding = Math.round(basePadding * scaleFactor);
-
-      document.querySelectorAll('.hud, .level-display, .hp-display').forEach(el => {
-        el.style.fontSize = `${scaledFontSize}px`;
-        el.style.top = `${scaledPadding}px`;
-      });
-
-      upgradeDockElement.style.padding = `${scaledPadding}px`;
-      document.querySelectorAll('.upgrade-button').forEach(btn => {
-        btn.style.fontSize = `${Math.round(14 * scaleFactor)}px`;
-        btn.style.padding = `${Math.round(10 * scaleFactor)}px ${Math.round(15 * scaleFactor)}px`;
-        btn.style.borderRadius = `${Math.round(5 * scaleFactor)}px`;
-      });
-
-      hudHeight = hudElement.offsetHeight + scaledPadding;
-      dockHeight = upgradeDockElement.offsetHeight + scaledPadding / 2;
-      playableTop = hudHeight;
-      playableBottom = height - dockHeight;
-
-      // Adjust initial player position and reset orbs
-      player.x = width / 2;
-      player.y = (playableTop + playableBottom) / 2;
-      resetOrbs();
+      canvas.width = Math.min(window.innerWidth, 600);
+      canvas.height = Math.min(window.innerHeight, 800);
+      gameWidth = canvas.width;
+      gameHeight = canvas.height;
+      player.x = (gameWidth - playerWidth) / 2;
+      player.y = gameHeight - playerHeight - 20;
     }
 
-    function getRandomPos(radius = 0) {
-      return {
-        x: Math.random() * (width - 2 * radius) + radius,
-        y: Math.random() * (playableBottom - playableTop - 2 * radius) + playableTop + radius
-      };
-    }
-
-    function createOrb() {
-      let pos = getRandomPos(8 * scaleFactor);
-      while (Math.sqrt(Math.pow(pos.x - player.x, 2) + Math.pow(pos.y - player.y, 2)) < (player.radius + 20) * scaleFactor) {
-        pos = getRandomPos(8 * scaleFactor);
+    class Player {
+      constructor(x, y, width, height, color) {
+        this.x = x;
+        this.y = y;
+        this.width = width;
+        this.height = height;
+        this.color = color;
       }
-      orbs.push({ ...pos, radius: 8 * scaleFactor });
+
+      draw() {
+        ctx.fillStyle = this.color;
+        ctx.fillRect(this.x, this.y, this.width, this.height);
+      }
+
+      moveLeft() {
+        this.x = Math.max(0, this.x - playerSpeed);
+      }
+
+      moveRight() {
+        this.x = Math.min(gameWidth - this.width, this.x + playerSpeed);
+      }
     }
 
-    function createEnemy() {
-      let pos = {
-        x: Math.random() * (width - 24 * scaleFactor) + 12 * scaleFactor,
-        y: Math.random() * (playableBottom - playableTop - 24 * scaleFactor) + playableTop + 12 * scaleFactor
-      };
-      enemies.push({ ...pos, radius: 12 * scaleFactor, speed: (1 + (level - 1) * 0.2) * scaleFactor });
+    class Bullet {
+      constructor(x, y, radius, color, speed) {
+        this.x = x;
+        this.y = y;
+        this.radius = radius;
+        this.color = color;
+        this.speed = speed;
+      }
+
+      draw() {
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      update() {
+        this.y += this.speed;
+      }
     }
 
-    function resetOrbs() {
-      orbs = [];
-      for (let i = 0; i < orbCount; i++) {
-        let pos = getRandomPos(8 * scaleFactor);
-        while (pos.x < 20 * scaleFactor || pos.x > width - 20 * scaleFactor || pos.y < playableTop + 20 * scaleFactor || pos.y > playableBottom - 20 * scaleFactor ||
-               Math.sqrt(Math.pow(pos.x - player.x, 2) + Math.pow(pos.y - player.y, 2)) < (player.radius + 20) * scaleFactor) {
-          pos = getRandomPos(8 * scaleFactor);
+    class Enemy {
+      constructor(x, y, width, height, color, speed) {
+        this.x = x;
+        this.y = y;
+        this.width = width;
+        this.height = height;
+        this.color = color;
+        this.speed = speed;
+      }
+
+      draw() {
+        ctx.fillStyle = this.color;
+        ctx.fillRect(this.x, this.y, this.width, this.height);
+      }
+
+      update() {
+        this.y += this.speed;
+      }
+    }
+
+    function spawnEnemies(count) {
+      const enemySpacingX = enemyWidth * 1.5;
+      const startX = (gameWidth - (count - 1) * enemySpacingX) / 2;
+      for (let i = 0; i < count; i++) {
+        const x = startX + i * enemySpacingX;
+        const y = -enemyHeight;
+        enemies.push(new Enemy(x, y, enemyWidth, enemyHeight, enemyColor, enemySpeed));
+      }
+    }
+
+    function shoot() {
+      const currentTime = Date.now();
+      if (currentTime - lastShotTime > 300) {
+        bullets.push(new Bullet(player.x + playerWidth / 2, player.y, bulletRadius, bulletColor, bulletSpeed));
+        lastShotTime = currentTime;
+      }
+    }
+
+    function updateGame() {
+      if (isGameOver) return;
+
+      ctx.clearRect(0, 0, gameWidth, gameHeight);
+
+      player.draw();
+      shoot();
+
+      // Update and draw bullets
+      bullets.forEach((bullet, index) => {
+        bullet.update();
+        bullet.draw();
+        if (bullet.y < 0) {
+          bullets.splice(index, 1);
         }
-        orbs.push({ ...pos, radius: 8 * scaleFactor });
+      });
+
+      // Update and draw enemies
+      enemies.forEach((enemy, index) => {
+        enemy.update();
+        enemy.draw();
+
+        // Collision detection with bullets
+        bullets.forEach((bullet, bulletIndex) => {
+          if (
+            bullet.x > enemy.x &&
+            bullet.x < enemy.x + enemy.width &&
+            bullet.y > enemy.y &&
+            bullet.y < enemy.y + enemy.height
+          ) {
+            enemies.splice(index, 1);
+            bullets.splice(bulletIndex, 1);
+            score++;
+          }
+        });
+
+        // Check if enemy reached the bottom
+        if (enemy.y > gameHeight) {
+          gameOver();
+        }
+      });
+
+      // Remove off-screen enemies
+      enemies = enemies.filter(enemy => enemy.y <= gameHeight);
+
+      // Check if wave is cleared
+      if (enemies.length === 0) {
+        wave++;
+        enemySpeed *= 1.1; // Increase enemy speed
+        spawnEnemies(Math.floor(5 + wave * 0.5)); // Increase enemy count
       }
+
+      // Increase difficulty over time
+      const currentTime = Date.now();
+      if (currentTime - lastWaveIncreaseTime > waveIncreaseInterval) {
+        enemySpeed *= 1.05; // Slightly increase speed over time
+        spawnEnemies(Math.floor(5 + wave * 0.5)); // Add more enemies periodically
+        lastWaveIncreaseTime = currentTime;
+      }
+
+      // Draw score
+      ctx.fillStyle = 'white';
+      ctx.font = '16px Arial';
+      ctx.fillText(`Score: ${score}`, 10, 20);
+      ctx.fillText(`Wave: ${wave}`, 10, 40);
+    }
+
+    function gameOver() {
+      isGameOver = true;
+      clearInterval(gameInterval);
+      ctx.fillStyle = 'black';
+      ctx.fillRect(0, 0, gameWidth, gameHeight);
+      ctx.fillStyle = 'white';
+      ctx.font = '30px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('Game Over!', gameWidth / 2, gameHeight / 2 - 20);
+      ctx.font = '20px Arial';
+      ctx.fillText(`Score: ${score}`, gameWidth / 2, gameHeight / 2 + 20);
+      ctx.textAlign = 'start'; // Reset text alignment
     }
 
     function resetGame() {
-      player = { x: width / 2, y: (playableTop + playableBottom) / 2, radius: 10 * scaleFactor, speed: 3 * scaleFactor, target: null, hp: 1, maxHp: 1 };
+      score = 0;
+      wave = 1;
+      enemySpeed = 1;
+      bullets = [];
       enemies = [];
-      coins = 0;
-      level = 1;
-      subLevel = 1;
-      coinPerOrb = 1;
-      speedUpgradeCost = 10;
-      sizeUpgradeCost = 15;
-      levelUpCost = 20;
-      sizeUpgradeCosts = [15];
-      for (let i = 0; i < level; i++) {
-        createEnemy();
-      }
-      resetOrbs();
-      updateHUD();
+      isGameOver = false;
+      lastWaveIncreaseTime = Date.now();
+      spawnEnemies(5);
+      clearInterval(gameInterval);
+      gameInterval = setInterval(updateGame, 1000 / 60);
     }
 
-    function updateHUD() {
-      document.getElementById('coins').textContent = coins;
-      document.getElementById('coinPerOrb').textContent = coinPerOrb;
-      document.getElementById('level').textContent = level;
-      document.getElementById('subLevel').textContent = subLevel;
-      document.getElementById('hp').textContent = player.hp;
-      document.getElementById('speedCost').textContent = speedUpgradeCost;
-      document.getElementById('sizeCost').textContent = sizeUpgradeCost;
-      document.getElementById('levelUpCost').textContent = levelUpCost;
-    }
+    // Touch event handlers
+    canvas.addEventListener('touchstart', (e) => {
+      touchStartX = e.touches[0].clientX;
+    });
 
-    function movePlayer() {
-      if (player.target) {
-        const dx = player.target.x - player.x;
-        const dy = player.target.y - player.y;
-        const angle = Math.atan2(dy, dx);
-        const vx = Math.cos(angle) * player.speed;
-        const vy = Math.sin(angle) * player.speed;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist < player.speed) {
-          player.x = player.target.x;
-          player.y = player.target.y;
-          player.target = null;
-        } else {
-          player.x += vx;
-          player.y += vy;
-        }
+    canvas.addEventListener('touchmove', (e) => {
+      if (touchStartX === null) return;
+
+      const touchX = e.touches[0].clientX;
+      const deltaX = touchX - touchStartX;
+
+      if (deltaX > 0) {
+        player.moveRight();
+      } else if (deltaX < 0) {
+        player.moveLeft();
       }
 
-      player.y = Math.max(playableTop + player.radius, Math.min(playableBottom - player.radius, player.y));
-      player.x = Math.max(player.radius, Math.min(width - player.radius, player.x));
-    }
+      touchStartX = touchX;
+      e.preventDefault(); // Prevent scrolling
+    });
 
-    function moveEnemies() {
-      enemies.forEach(enemy => {
-        const dx = player.x - enemy.x;
-        const dy = player.y - enemy.y;
-        const angle = Math.atan2(dy, dx);
-        enemy.x += Math.cos(angle) * enemy.speed;
-        enemy.y += Math.sin(angle) * enemy.speed;
+    canvas.addEventListener('touchend', () => {
+      touchStartX = null;
+    });
 
-        enemy.y = Math.max(playableTop + enemy.radius, Math.min(playableBottom - enemy.radius, enemy.y));
-        enemy.x = Math.max(enemy.radius, Math.min(width - enemy.radius, enemy.x));
-      });
-    }
-
-    function updateOrbs() {
-      orbs.forEach(orb => {
-        const dx = orb.x - player.x;
-        const dy = orb.y - player.y;
-        const angle = Math.atan2(dy, dx);
-        const orbSpeed = (0.5 + (level - 1) * 0.1) * scaleFactor;
-        orb.x += Math.cos(angle) * orbSpeed;
-        orb.y += Math.sin(angle) * orbSpeed;
-
-        orb.y = Math.max(playableTop + orb.radius, Math.min(playableBottom - orb.radius, orb.y));
-        orb.x = Math.max(orb.radius, Math.min(width - orb.radius, orb.x));
-      });
-    }
-
-    function checkCollisions() {
-      const scaledPlayerRadiusSq = player.radius * player.radius;
-      for (let i = orbs.length - 1; i >= 0; i--) {
-        const dx = player.x - orbs[i].x;
-        const dy = player.y - orbs[i].y;
-        const distSq = dx * dx + dy * dy;
-        const radiiSumSq = Math.pow(player.radius + orbs[i].radius, 2);
-        if (distSq < radiiSumSq) {
-          coins += coinPerOrb;
-          orbs.splice(i, 1);
-          updateHUD();
-        }
-      }
-
-      if (orbs.length === 0) {
-        subLevel++;
-        coinPerOrb++;
-        resetOrbs();
-      }
-
-      for (let i = 0; i < enemies.length; i++) {
-        const dx = player.x - enemies[i].x;
-        const dy = player.y - enemies[i].y;
-        const distSq = dx * dx + dy * dy;
-        const radiiSumSq = Math.pow(player.radius + enemies[i].radius, 2);
-        if (distSq < radiiSumSq) {
-          if (player.hp > 0) {
-            player.hp--;
-            player.radius = Math.max(10 * scaleFactor, player.radius - 2 * scaleFactor);
-          } else {
-            coins = Math.max(0, coins - 5);
-          }
-          let newPos = {
-            x: Math.random() * (width - 24 * scaleFactor) + 12 * scaleFactor,
-            y: Math.random() * (playableBottom - playableTop - 24 * scaleFactor) + playableTop + 12 * scaleFactor
-          };
-          enemies[i].x = newPos.x;
-          enemies[i].y = newPos.y;
-          updateHUD();
-        }
-      }
-    }
-
-    function draw() {
-      ctx.clearRect(0, 0, width, height);
-      ctx.save();
-      ctx.scale(scaleFactor, scaleFactor);
-
-      // Draw player
-      ctx.fillStyle = 'white';
-      ctx.beginPath();
-      ctx.arc(player.x / scaleFactor, player.y / scaleFactor, player.radius / scaleFactor, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Draw enemies
-      ctx.fillStyle = 'orange';
-      enemies.forEach(enemy => {
-        ctx.beginPath();
-        ctx.arc(enemy.x / scaleFactor, enemy.y / scaleFactor, enemy.radius / scaleFactor, 0, Math.PI * 2);
-        ctx.fill();
-      });
-
-      // Draw orbs
-      ctx.fillStyle = 'green';
-      orbs.forEach(orb => {
-        ctx.beginPath();
-        ctx.arc(orb.x / scaleFactor, orb.y / scaleFactor, orb.radius / scaleFactor, 0, Math.PI * 2);
-        ctx.fill();
-      });
-
-      ctx.restore();
-    }
-
-    function gameLoop() {
-      movePlayer();
-      moveEnemies();
-      updateOrbs();
-      checkCollisions();
-      draw();
-      requestAnimationFrame(gameLoop);
-    }
-
-    function handleInput(e) {
-      const rect = canvas.getBoundingClientRect();
-      player.target = {
-        x: ((e.clientX || e.touches[0].clientX) - rect.left) / scaleFactor,
-        y: ((e.clientY || e.touches[0].clientY) - rect.top) / scaleFactor
-      };
+    // Initial setup
+    function init() {
+      resizeCanvas();
+      player = new Player((gameWidth - playerWidth) / 2, gameHeight - playerHeight - 20, playerWidth, playerHeight, playerColor);
+      spawnEnemies(5);
+      gameInterval = setInterval(updateGame, 1000 / 60);
     }
 
     window.addEventListener('resize', resizeCanvas);
-    canvas.addEventListener('mousedown', handleInput);
-    canvas.addEventListener('touchstart', handleInput);
-
-    document.getElementById('speedUpgradeBtn').addEventListener('click', () => {
-      if (coins >= speedUpgradeCost) {
-        coins -= speedUpgradeCost;
-        player.speed += 0.5 * scaleFactor;
-        speedUpgradeCost = Math.round(speedUpgradeCost * 1.5);
-        updateHUD();
-      }
-    });
-
-    document.getElementById('sizeUpgradeBtn').addEventListener('click', () => {
-      if (coins >= sizeUpgradeCost) {
-        coins -= sizeUpgradeCost;
-        player.radius += 2 * scaleFactor;
-        player.hp++;
-        player.maxHp++;
-        sizeUpgradeCosts.push(Math.round(sizeUpgradeCost * 1.6));
-        sizeUpgradeCost = sizeUpgradeCosts[sizeUpgradeCosts.length - 1];
-        updateHUD();
-      }
-    });
-
-    document.getElementById('levelUpBtn').addEventListener('click', () => {
-      if (coins >= levelUpCost && level < 10) {
-        coins -= levelUpCost;
-        level++;
-        subLevel = 1;
-        coinPerOrb *= 2;
-        createEnemy();
-        levelUpCost = 20 * level;
-        updateHUD();
-      }
-    });
-
-    resizeCanvas(); // Initial resize
-    resetGame();
-    gameLoop();
+    init();
   </script>
 </body>
 </html>
