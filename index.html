@@ -1,265 +1,296 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<title>Chicken Treadmill Invaders</title>
-<style>
-  body { margin: 0; overflow: hidden; background-color: #f0e68c; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
-  canvas { background-color: #228b22; display: block; }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aim Trainer</title>
+    <style>
+        /* General body styling */
+        body {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh; /* Full viewport height */
+            margin: 0;
+            background-color: #1a1a2e; /* Dark background */
+            color: #e0e0e0; /* Light text color */
+            font-family: 'Inter', sans-serif; /* Modern font */
+            overflow: hidden; /* Prevent scrollbars */
+        }
+
+        /* Game container styling */
+        .game-container {
+            background-color: #2a2a4a; /* Slightly lighter dark background for container */
+            border-radius: 15px; /* Rounded corners */
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5); /* Soft shadow */
+            padding: 20px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 90%; /* Responsive width */
+            max-width: 800px; /* Max width for larger screens */
+            box-sizing: border-box; /* Include padding in width */
+        }
+
+        /* Game title */
+        h1 {
+            color: #00bcd4; /* Bright cyan */
+            margin-bottom: 20px;
+            font-size: 2.5em; /* Larger title */
+            text-shadow: 0 0 10px rgba(0, 188, 212, 0.7); /* Glow effect */
+        }
+
+        /* Score and timer display */
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            width: 100%;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #e0e0e0;
+        }
+
+        .stat-item {
+            padding: 10px 20px;
+            background-color: #3a3a5a; /* Darker background for stats */
+            border-radius: 10px;
+            box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.3); /* Inner shadow */
+        }
+
+        /* Canvas styling */
+        canvas {
+            background-color: #1f1f3f; /* Darker background for canvas */
+            border: 3px solid #00bcd4; /* Cyan border */
+            border-radius: 10px;
+            display: block;
+            cursor: crosshair; /* Crosshair cursor for aiming */
+            touch-action: none; /* Disable default touch actions like scrolling/zooming */
+            width: 100%; /* Make canvas responsive */
+            height: 400px; /* Fixed height for now, will adjust dynamically if needed */
+            max-height: 70vh; /* Max height relative to viewport */
+        }
+
+        /* Button styling */
+        button {
+            background: linear-gradient(145deg, #00bcd4, #008ba3); /* Gradient background */
+            color: white;
+            border: none;
+            border-radius: 10px;
+            padding: 15px 30px;
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-top: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease; /* Smooth transitions */
+            box-shadow: 0 5px 15px rgba(0, 188, 212, 0.4); /* Button shadow */
+            outline: none; /* Remove outline on focus */
+        }
+
+        button:hover {
+            background: linear-gradient(145deg, #00e0ff, #00a0b8); /* Lighter gradient on hover */
+            transform: translateY(-3px); /* Lift effect */
+            box-shadow: 0 8px 20px rgba(0, 188, 212, 0.6); /* Larger shadow on hover */
+        }
+
+        button:active {
+            transform: translateY(0); /* Press effect */
+            box-shadow: 0 2px 5px rgba(0, 188, 212, 0.4); /* Smaller shadow on active */
+        }
+
+        /* Game over message */
+        .game-over-message {
+            font-size: 2em;
+            color: #ff4d4d; /* Red for game over */
+            margin-top: 20px;
+            font-weight: bold;
+            text-shadow: 0 0 10px rgba(255, 77, 77, 0.7);
+            display: none; /* Hidden by default */
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 600px) {
+            h1 {
+                font-size: 1.8em;
+            }
+
+            .stats {
+                font-size: 1.2em;
+                flex-direction: column; /* Stack stats on small screens */
+                gap: 10px; /* Space between stacked stats */
+            }
+
+            .stat-item {
+                width: 80%; /* Make stat items wider */
+                margin: 0 auto; /* Center them */
+            }
+
+            button {
+                padding: 12px 25px;
+                font-size: 1em;
+            }
+
+            canvas {
+                height: 300px; /* Adjust canvas height for smaller screens */
+            }
+        }
+    </style>
 </head>
 <body>
-  <canvas id="gameCanvas"></canvas>
+    <div class="game-container">
+        <h1>Aim Trainer</h1>
+        <div class="stats">
+            <div class="stat-item">Score: <span id="score">0</span></div>
+            <div class="stat-item">Time: <span id="time">30</span>s</div>
+        </div>
+        <canvas id="gameCanvas"></canvas>
+        <div id="gameOverMessage" class="game-over-message">Game Over! Your Score: <span id="finalScore">0</span></div>
+        <button id="startButton">Start Game</button>
+    </div>
 
-  <script>
-    const canvas = document.getElementById('gameCanvas');
-    const ctx = canvas.getContext('2d');
+    <script>
+        // Get canvas and its context
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
 
-    let gameWidth;
-    let gameHeight;
-    let player;
-    let bullets = [];
-    let enemies = [];
-    let score = 0;
-    let gameInterval;
-    let lastShotTime = 0;
-    const playerSpeed = 5;
-    const bulletSpeed = -10;
-    const playerWidth = 50;
-    const playerHeight = 30;
-    const bulletRadius = 5;
-    const playerColor = 'blue';
-    const bulletColor = 'yellow';
-    const enemyWidth = 40;
-    const enemyHeight = 30;
-    const enemyColor = 'red';
-    let enemySpeed = 1;
-    let wave = 1;
-    let lastWaveIncreaseTime = 0;
-    const waveIncreaseInterval = 30000; // 30 seconds
-    let isGameOver = false;
-    let touchStartX = null;
+        // Get score, time, and button elements
+        const scoreDisplay = document.getElementById('score');
+        const timeDisplay = document.getElementById('time');
+        const startButton = document.getElementById('startButton');
+        const gameOverMessage = document.getElementById('gameOverMessage');
+        const finalScoreDisplay = document.getElementById('finalScore');
 
-    function resizeCanvas() {
-      canvas.width = Math.min(window.innerWidth, 600);
-      canvas.height = Math.min(window.innerHeight, 800);
-      gameWidth = canvas.width;
-      gameHeight = canvas.height;
-      player.x = (gameWidth - playerWidth) / 2;
-      player.y = gameHeight - playerHeight - 20;
-    }
+        // Game variables
+        let score = 0;
+        let timeLeft = 30; // Game duration in seconds
+        let gameActive = false;
+        let target = { x: 0, y: 0, radius: 20, color: '#ff4d4d' }; // Initial target properties
+        let targetInterval;
+        let gameTimer;
 
-    class Player {
-      constructor(x, y, width, height, color) {
-        this.x = x;
-        this.y = y;
-        this.width = width;
-        this.height = height;
-        this.color = color;
-      }
+        // Function to set canvas size based on its rendered dimensions
+        function setCanvasSize() {
+            // Get the actual rendered width and height of the canvas element as determined by CSS
+            const displayedWidth = canvas.offsetWidth;
+            const displayedHeight = canvas.offsetHeight;
 
-      draw() {
-        ctx.fillStyle = this.color;
-        ctx.fillRect(this.x, this.y, this.width, this.height);
-      }
+            // Set the internal drawing buffer dimensions to match the displayed dimensions
+            canvas.width = displayedWidth;
+            canvas.height = displayedHeight;
 
-      moveLeft() {
-        this.x = Math.max(0, this.x - playerSpeed);
-      }
-
-      moveRight() {
-        this.x = Math.min(gameWidth - this.width, this.x + playerSpeed);
-      }
-    }
-
-    class Bullet {
-      constructor(x, y, radius, color, speed) {
-        this.x = x;
-        this.y = y;
-        this.radius = radius;
-        this.color = color;
-        this.speed = speed;
-      }
-
-      draw() {
-        ctx.fillStyle = this.color;
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-        ctx.closePath();
-        ctx.fill();
-      }
-
-      update() {
-        this.y += this.speed;
-      }
-    }
-
-    class Enemy {
-      constructor(x, y, width, height, color, speed) {
-        this.x = x;
-        this.y = y;
-        this.width = width;
-        this.height = height;
-        this.color = color;
-        this.speed = speed;
-      }
-
-      draw() {
-        ctx.fillStyle = this.color;
-        ctx.fillRect(this.x, this.y, this.width, this.height);
-      }
-
-      update() {
-        this.y += this.speed;
-      }
-    }
-
-    function spawnEnemies(count) {
-      const enemySpacingX = enemyWidth * 1.5;
-      const startX = (gameWidth - (count - 1) * enemySpacingX) / 2;
-      for (let i = 0; i < count; i++) {
-        const x = startX + i * enemySpacingX;
-        const y = -enemyHeight;
-        enemies.push(new Enemy(x, y, enemyWidth, enemyHeight, enemyColor, enemySpeed));
-      }
-    }
-
-    function shoot() {
-      const currentTime = Date.now();
-      if (currentTime - lastShotTime > 300) {
-        bullets.push(new Bullet(player.x + playerWidth / 2, player.y, bulletRadius, bulletColor, bulletSpeed));
-        lastShotTime = currentTime;
-      }
-    }
-
-    function updateGame() {
-      if (isGameOver) return;
-
-      ctx.clearRect(0, 0, gameWidth, gameHeight);
-
-      player.draw();
-      shoot();
-
-      // Update and draw bullets
-      bullets.forEach((bullet, index) => {
-        bullet.update();
-        bullet.draw();
-        if (bullet.y < 0) {
-          bullets.splice(index, 1);
+            // Redraw everything after resizing, or clear if game is not active
+            if (gameActive) {
+                drawTarget();
+            } else {
+                ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear canvas if game is not active
+            }
         }
-      });
 
-      // Update and draw enemies
-      enemies.forEach((enemy, index) => {
-        enemy.update();
-        enemy.draw();
-
-        // Collision detection with bullets
-        bullets.forEach((bullet, bulletIndex) => {
-          if (
-            bullet.x > enemy.x &&
-            bullet.x < enemy.x + enemy.width &&
-            bullet.y > enemy.y &&
-            bullet.y < enemy.y + enemy.height
-          ) {
-            enemies.splice(index, 1);
-            bullets.splice(bulletIndex, 1);
-            score++;
-          }
-        });
-
-        // Check if enemy reached the bottom
-        if (enemy.y > gameHeight) {
-          gameOver();
+        // Draw target function
+        function drawTarget() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear canvas before drawing
+            ctx.beginPath();
+            ctx.arc(target.x, target.y, target.radius, 0, Math.PI * 2);
+            ctx.fillStyle = target.color;
+            ctx.fill();
+            ctx.strokeStyle = '#e0e0e0'; // White border
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.closePath();
         }
-      });
 
-      // Remove off-screen enemies
-      enemies = enemies.filter(enemy => enemy.y <= gameHeight);
+        // Generate a new target position
+        function generateTarget() {
+            // Ensure target is fully within canvas boundaries
+            target.x = Math.random() * (canvas.width - target.radius * 2) + target.radius;
+            target.y = Math.random() * (canvas.height - target.radius * 2) + target.radius;
+            drawTarget();
+        }
 
-      // Check if wave is cleared
-      if (enemies.length === 0) {
-        wave++;
-        enemySpeed *= 1.1; // Increase enemy speed
-        spawnEnemies(Math.floor(5 + wave * 0.5)); // Increase enemy count
-      }
+        // Handle click event on canvas
+        function handleClick(event) {
+            if (!gameActive) return;
 
-      // Increase difficulty over time
-      const currentTime = Date.now();
-      if (currentTime - lastWaveIncreaseTime > waveIncreaseInterval) {
-        enemySpeed *= 1.05; // Slightly increase speed over time
-        spawnEnemies(Math.floor(5 + wave * 0.5)); // Add more enemies periodically
-        lastWaveIncreaseTime = currentTime;
-      }
+            // Get click coordinates relative to the canvas
+            const rect = canvas.getBoundingClientRect();
+            const clickX = event.clientX - rect.left;
+            const clickY = event.clientY - rect.top;
 
-      // Draw score
-      ctx.fillStyle = 'white';
-      ctx.font = '16px Arial';
-      ctx.fillText(`Score: ${score}`, 10, 20);
-      ctx.fillText(`Wave: ${wave}`, 10, 40);
-    }
+            // Calculate distance from click to target center
+            const distance = Math.sqrt(
+                (clickX - target.x) ** 2 + (clickY - target.y) ** 2
+            );
 
-    function gameOver() {
-      isGameOver = true;
-      clearInterval(gameInterval);
-      ctx.fillStyle = 'black';
-      ctx.fillRect(0, 0, gameWidth, gameHeight);
-      ctx.fillStyle = 'white';
-      ctx.font = '30px Arial';
-      ctx.textAlign = 'center';
-      ctx.fillText('Game Over!', gameWidth / 2, gameHeight / 2 - 20);
-      ctx.font = '20px Arial';
-      ctx.fillText(`Score: ${score}`, gameWidth / 2, gameHeight / 2 + 20);
-      ctx.textAlign = 'start'; // Reset text alignment
-    }
+            // Check if click hit the target
+            if (distance < target.radius) {
+                score++;
+                scoreDisplay.textContent = score;
+                generateTarget(); // Generate new target on hit
+            } else {
+                // Optional: penalize for misses, or just do nothing
+                // score = Math.max(0, score - 1); // Example: decrement score on miss
+                // scoreDisplay.textContent = score;
+            }
+        }
 
-    function resetGame() {
-      score = 0;
-      wave = 1;
-      enemySpeed = 1;
-      bullets = [];
-      enemies = [];
-      isGameOver = false;
-      lastWaveIncreaseTime = Date.now();
-      spawnEnemies(5);
-      clearInterval(gameInterval);
-      gameInterval = setInterval(updateGame, 1000 / 60);
-    }
+        // Game over function
+        function gameOver() {
+            gameActive = false;
+            clearInterval(targetInterval);
+            clearInterval(gameTimer);
+            startButton.textContent = 'Play Again';
+            startButton.style.display = 'block'; // Show the button
+            gameOverMessage.style.display = 'block'; // Show game over message
+            finalScoreDisplay.textContent = score; // Display final score
+            ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear canvas
+        }
 
-    // Touch event handlers
-    canvas.addEventListener('touchstart', (e) => {
-      touchStartX = e.touches[0].clientX;
-    });
+        // Start game function
+        function startGame() {
+            score = 0;
+            timeLeft = 30;
+            scoreDisplay.textContent = score;
+            timeDisplay.textContent = timeLeft;
+            startButton.style.display = 'none'; // Hide the start button
+            gameOverMessage.style.display = 'none'; // Hide game over message
+            gameActive = true;
 
-    canvas.addEventListener('touchmove', (e) => {
-      if (touchStartX === null) return;
+            setCanvasSize(); // Set initial canvas size
+            generateTarget(); // Generate first target
 
-      const touchX = e.touches[0].clientX;
-      const deltaX = touchX - touchStartX;
+            // Set interval for target disappearance/reappearance (every 1.5 seconds)
+            targetInterval = setInterval(generateTarget, 1500);
 
-      if (deltaX > 0) {
-        player.moveRight();
-      } else if (deltaX < 0) {
-        player.moveLeft();
-      }
+            // Set game timer
+            gameTimer = setInterval(() => {
+                timeLeft--;
+                timeDisplay.textContent = timeLeft;
+                if (timeLeft <= 0) {
+                    gameOver();
+                }
+            }, 1000);
+        }
 
-      touchStartX = touchX;
-      e.preventDefault(); // Prevent scrolling
-    });
+        // Event listeners
+        startButton.addEventListener('click', startGame);
+        canvas.addEventListener('mousedown', handleClick); // Use mousedown for quicker response
+        canvas.addEventListener('touchstart', (e) => { // Handle touch events for mobile
+            e.preventDefault(); // Prevent scrolling/zooming
+            handleClick(e.touches[0]); // Pass the first touch point
+        }, { passive: false }); // passive: false to allow preventDefault
 
-    canvas.addEventListener('touchend', () => {
-      touchStartX = null;
-    });
+        // Adjust canvas size on window resize
+        window.addEventListener('resize', setCanvasSize);
 
-    // Initial setup
-    function init() {
-      resizeCanvas();
-      player = new Player((gameWidth - playerWidth) / 2, gameHeight - playerHeight - 20, playerWidth, playerHeight, playerColor);
-      spawnEnemies(5);
-      gameInterval = setInterval(updateGame, 1000 / 60);
-    }
+        // Initial setup when the window loads
+        window.onload = () => {
+            setCanvasSize(); // Set canvas size initially
+            // No need to call drawTarget here, it will be called by startGame
+            // or generateTarget when the game starts.
+        };
 
-    window.addEventListener('resize', resizeCanvas);
-    init();
-  </script>
+    </script>
 </body>
 </html>
