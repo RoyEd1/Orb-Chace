@@ -3,147 +3,427 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Basic Icy Tower Concept</title>
+    <title>Flappy Bird Style Game</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
+        /* Custom CSS for the canvas and overall game appearance */
         body {
             margin: 0;
             overflow: hidden; /* Prevent scrolling */
-            background-color: #333;
+            font-family: 'Inter', sans-serif; /* Using Inter font */
+            background-color: #1a202c; /* Dark background */
             display: flex;
             justify-content: center;
             align-items: center;
             height: 100vh;
+            color: #fff;
         }
+
         canvas {
-            background-color: #555;
-            border: 2px solid #ccc;
+            background-color: #70c5ce; /* Sky blue background for the game area */
+            border: 4px solid #4a5568; /* Border around the game canvas */
+            border-radius: 1rem; /* Rounded corners for the canvas */
+            box-shadow: 0 10px 15px rgba(0, 0, 0, 0.3); /* Subtle shadow */
+            display: block; /* Remove extra space below canvas */
+            touch-action: manipulation; /* Prevent default touch actions like double-tap zoom */
+        }
+
+        .game-container {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+        }
+
+        .game-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            border-radius: 1rem;
+            text-align: center;
+            padding: 1rem;
+            box-sizing: border-box;
+        }
+
+        .game-overlay h1 {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-bottom: 1rem;
+            color: #f7fafc;
+        }
+
+        .game-overlay p {
+            font-size: 1.2rem;
+            margin-bottom: 2rem;
+            color: #cbd5e0;
+        }
+
+        .game-button {
+            background-color: #4CAF50; /* Green */
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 0.75rem;
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            background-image: linear-gradient(to bottom right, #4CAF50, #45a049);
+        }
+
+        .game-button:hover {
+            background-color: #45a049;
+            transform: translateY(-2px);
+        }
+
+        .game-button:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .score-display {
+            position: absolute;
+            top: 1rem;
+            color: white;
+            font-size: 2rem;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+            z-index: 10; /* Ensure score is above canvas but below overlay */
+        }
+
+        /* Responsive adjustments for smaller screens */
+        @media (max-width: 768px) {
+            .game-overlay h1 {
+                font-size: 2rem;
+            }
+            .game-overlay p {
+                font-size: 1rem;
+            }
+            .game-button {
+                padding: 0.6rem 1.2rem;
+                font-size: 1rem;
+            }
+            .score-display {
+                font-size: 1.5rem;
+            }
         }
     </style>
 </head>
 <body>
-    <canvas id="gameCanvas"></canvas>
+    <div class="game-container">
+        <canvas id="gameCanvas"></canvas>
+        <div id="gameOverlay" class="game-overlay hidden">
+            <h1 id="overlayTitle">Flappy Bird</h1>
+            <p id="overlayMessage">Tap or click to jump. Avoid the pipes!</p>
+            <button id="startButton" class="game-button">Start Game</button>
+        </div>
+        <div id="scoreDisplay" class="score-display hidden">Score: 0</div>
+    </div>
 
     <script>
-        // --- Game Setup ---
+        // Get the canvas and its 2D rendering context
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
 
-        // Set canvas dimensions (adjust for iPad Pro - you'd want responsive design)
-        canvas.width = window.innerWidth > 768 ? 768 : window.innerWidth * 0.9; // Max 768px wide or 90% of screen
-        canvas.height = window.innerHeight > 1024 ? 1024 : window.innerHeight * 0.9; // Max 1024px tall or 90% of screen
+        // Get UI elements
+        const gameOverlay = document.getElementById('gameOverlay');
+        const overlayTitle = document.getElementById('overlayTitle');
+        const overlayMessage = document.getElementById('overlayMessage');
+        const startButton = document.getElementById('startButton');
+        const scoreDisplay = document.getElementById('scoreDisplay');
 
-        // --- Game Variables ---
-        const player = {
-            x: canvas.width / 2 - 25,
-            y: canvas.height - 100,
-            width: 50,
-            height: 50,
-            color: 'skyblue',
-            velocityY: 0,
-            isJumping: false,
-            grounded: false
+        // Game state variables
+        let gameRunning = false;
+        let gameOver = false;
+        let score = 0;
+        let animationFrameId; // To store the requestAnimationFrame ID for stopping the loop
+
+        // --- Game Settings ---
+        const BIRD_RADIUS = 20;
+        const BIRD_COLOR = '#ffeb3b'; // Yellow
+        const PIPE_COLOR = '#4CAF50'; // Green
+        const PIPE_WIDTH = 80;
+        const PIPE_GAP = 200; // Vertical gap between top and bottom pipes
+        const PIPE_SPEED = 3;
+        const GRAVITY = 0.5;
+        const JUMP_VELOCITY = -8; // Negative for upward movement
+
+        // Player (bird) object
+        const bird = {
+            x: 0, // Will be set relative to canvas width
+            y: 0, // Will be set relative to canvas height
+            velocity: 0,
+            radius: BIRD_RADIUS
         };
 
-        const gravity = 0.5;
-        const jumpForce = -12; // Negative for upward movement
+        // Array to hold pipe objects
+        const pipes = [];
+        let pipeSpawnTimer = 0;
+        const PIPE_SPAWN_INTERVAL = 1500; // Milliseconds between pipe spawns
 
-        const platforms = [];
-        const platformWidth = 150;
-        const platformHeight = 20;
-        const platformColor = 'lime';
+        // Ground settings
+        const GROUND_HEIGHT = 50;
+        const GROUND_COLOR = '#d4a017'; // Brown
 
-        // Initial platforms (simple static arrangement)
-        function createInitialPlatforms() {
-            platforms.push({ x: canvas.width / 2 - 75, y: canvas.height - 50, width: platformWidth, height: platformHeight });
-            platforms.push({ x: canvas.width / 4, y: canvas.height - 200, width: platformWidth, height: platformHeight });
-            platforms.push({ x: canvas.width * 3 / 4 - platformWidth, y: canvas.height - 350, width: platformWidth, height: platformHeight });
-            platforms.push({ x: canvas.width / 2 - 75, y: canvas.height - 500, width: platformWidth, height: platformHeight });
+        // --- Initialization and Resizing ---
+
+        // Function to set canvas dimensions based on window size
+        function setCanvasSize() {
+            // Max dimensions for larger screens, otherwise a percentage of viewport
+            const maxWidth = 800;
+            const maxHeight = 600;
+
+            canvas.width = Math.min(maxWidth, window.innerWidth * 0.9);
+            canvas.height = Math.min(maxHeight, window.innerHeight * 0.8);
+
+            // Adjust bird's initial position if game is not running
+            if (!gameRunning && !gameOver) {
+                bird.x = canvas.width / 4;
+                bird.y = canvas.height / 2;
+            }
         }
-        createInitialPlatforms();
 
-        // --- Game Functions ---
+        // Call once on load
+        setCanvasSize();
+        // Listen for window resize events to make the game responsive
+        window.addEventListener('resize', setCanvasSize);
 
-        function drawPlayer() {
-            ctx.fillStyle = player.color;
-            ctx.fillRect(player.x, player.y, player.width, player.height);
+        // --- Drawing Functions ---
+
+        function drawBird() {
+            ctx.beginPath();
+            ctx.arc(bird.x, bird.y, bird.radius, 0, Math.PI * 2);
+            ctx.fillStyle = BIRD_COLOR;
+            ctx.fill();
+            ctx.strokeStyle = '#c0ca33'; // Darker yellow border
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.closePath();
         }
 
-        function drawPlatforms() {
-            ctx.fillStyle = platformColor;
-            platforms.forEach(p => {
-                ctx.fillRect(p.x, p.y, p.width, p.height);
+        function drawPipes() {
+            pipes.forEach(p => {
+                ctx.fillStyle = PIPE_COLOR;
+                ctx.strokeStyle = '#388e3c'; // Darker green border
+                ctx.lineWidth = 2;
+
+                // Top pipe
+                ctx.fillRect(p.x, 0, p.width, p.y);
+                ctx.strokeRect(p.x, 0, p.width, p.y);
+
+                // Bottom pipe
+                ctx.fillRect(p.x, p.y + p.gap, p.width, canvas.height - (p.y + p.gap) - GROUND_HEIGHT);
+                ctx.strokeRect(p.x, p.y + p.gap, p.width, canvas.height - (p.y + p.gap) - GROUND_HEIGHT);
             });
         }
 
-        function updatePlayer() {
-            // Apply gravity
-            player.velocityY += gravity;
-            player.y += player.velocityY;
+        function drawGround() {
+            ctx.fillStyle = GROUND_COLOR;
+            ctx.fillRect(0, canvas.height - GROUND_HEIGHT, canvas.width, GROUND_HEIGHT);
+            ctx.strokeStyle = '#8d6e63'; // Darker brown border
+            ctx.lineWidth = 2;
+            ctx.strokeRect(0, canvas.height - GROUND_HEIGHT, canvas.width, GROUND_HEIGHT);
+        }
 
-            // Check for collision with bottom of canvas (game over condition in a real game)
-            if (player.y + player.height > canvas.height) {
-                player.y = canvas.height - player.height;
-                player.velocityY = 0;
-                player.grounded = true;
-                player.isJumping = false;
-            } else {
-                player.grounded = false;
+        function drawScore() {
+            scoreDisplay.textContent = `Score: ${score}`;
+        }
+
+        // --- Game Logic Functions ---
+
+        function updateBird() {
+            bird.velocity += GRAVITY;
+            bird.y += bird.velocity;
+
+            // Prevent bird from going above the top of the canvas
+            if (bird.y - bird.radius < 0) {
+                bird.y = bird.radius;
+                bird.velocity = 0; // Stop upward movement if it hits the ceiling
             }
 
-            // Platform collision
-            platforms.forEach(p => {
-                // Check if player is above the platform AND falling AND horizontally overlapping
-                if (player.y + player.height < p.y + p.height && // Player's bottom is above platform's bottom
-                    player.y + player.height + player.velocityY >= p.y && // Player will hit or is hitting platform top
-                    player.x < p.x + p.width &&
-                    player.x + player.width > p.x) {
+            // Check for collision with ground
+            if (bird.y + bird.radius > canvas.height - GROUND_HEIGHT) {
+                bird.y = canvas.height - GROUND_HEIGHT - bird.radius;
+                endGame();
+            }
+        }
 
-                    // If falling and landed on platform
-                    if (player.velocityY >= 0) {
-                        player.y = p.y - player.height; // Snap to top of platform
-                        player.velocityY = 0;
-                        player.grounded = true;
-                        player.isJumping = false;
+        function updatePipes(deltaTime) {
+            // Move existing pipes
+            pipes.forEach(p => {
+                p.x -= PIPE_SPEED * (deltaTime / 16.67); // Adjust speed based on deltaTime
+            });
+
+            // Remove pipes that are off-screen
+            if (pipes.length > 0 && pipes[0].x + PIPE_WIDTH < 0) {
+                pipes.shift();
+            }
+
+            // Spawn new pipes
+            pipeSpawnTimer += deltaTime;
+            if (pipeSpawnTimer > PIPE_SPAWN_INTERVAL) {
+                // Random height for the top pipe's bottom edge (where the gap starts)
+                // Ensure there's enough space for the gap and some pipe above/below
+                const minPipeY = 50; // Minimum height for top pipe
+                const maxPipeY = canvas.height - GROUND_HEIGHT - PIPE_GAP - 50; // Maximum height for top pipe
+                const randomPipeY = Math.floor(Math.random() * (maxPipeY - minPipeY + 1)) + minPipeY;
+
+                pipes.push({
+                    x: canvas.width,
+                    y: randomPipeY, // Y coordinate of the bottom of the top pipe
+                    width: PIPE_WIDTH,
+                    gap: PIPE_GAP,
+                    passed: false // To track if the bird has passed this pipe for scoring
+                });
+                pipeSpawnTimer = 0;
+            }
+        }
+
+        function checkCollisions() {
+            pipes.forEach(p => {
+                // Check if bird is horizontally within pipe bounds
+                if (bird.x + bird.radius > p.x && bird.x - bird.radius < p.x + p.width) {
+                    // Check if bird is vertically colliding with top pipe or bottom pipe
+                    if (bird.y - bird.radius < p.y || bird.y + bird.radius > p.y + p.gap) {
+                        endGame();
                     }
+                }
+
+                // Check for scoring
+                if (!p.passed && bird.x > p.x + p.width) {
+                    score++;
+                    p.passed = true;
+                    drawScore(); // Update score display immediately
                 }
             });
         }
 
-        function jump() {
-            if (player.grounded) {
-                player.velocityY = jumpForce;
-                player.isJumping = true;
-                player.grounded = false;
+        function birdJump() {
+            if (gameRunning) {
+                bird.velocity = JUMP_VELOCITY;
+            } else if (gameOver) {
+                // If game is over, restart on click/tap
+                resetGame();
+                startGame();
             }
         }
 
-        // --- Game Loop ---
-        function gameLoop() {
-            // Clear canvas
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        // --- Game State Management ---
 
-            updatePlayer();
-            drawPlatforms();
-            drawPlayer();
+        function startGame() {
+            gameRunning = true;
+            gameOver = false;
+            score = 0;
+            pipes.length = 0; // Clear existing pipes
+            bird.y = canvas.height / 2; // Reset bird position
+            bird.velocity = 0;
+            pipeSpawnTimer = 0;
 
-            requestAnimationFrame(gameLoop); // Keep looping
+            gameOverlay.classList.add('hidden'); // Hide overlay
+            scoreDisplay.classList.remove('hidden'); // Show score
+
+            lastFrameTime = performance.now(); // Initialize for delta time calculation
+            gameLoop(); // Start the game loop
         }
 
-        // --- Event Listeners for Input ---
+        function endGame() {
+            gameRunning = false;
+            gameOver = true;
+            cancelAnimationFrame(animationFrameId); // Stop the game loop
 
-        // Desktop click
-        canvas.addEventListener('click', () => {
-            jump();
-        });
+            overlayTitle.textContent = 'Game Over!';
+            overlayMessage.innerHTML = `Your score: ${score}<br>Tap or click to play again.`;
+            startButton.textContent = 'Play Again';
+            gameOverlay.classList.remove('hidden'); // Show overlay
+            scoreDisplay.classList.add('hidden'); // Hide score
+        }
 
-        // Mobile touch (for iPad Pro)
+        function resetGame() {
+            // This function is called before startGame to clear state
+            score = 0;
+            pipes.length = 0;
+            bird.y = canvas.height / 2;
+            bird.velocity = 0;
+            pipeSpawnTimer = 0;
+            gameOver = false;
+            gameRunning = false;
+        }
+
+        function showStartScreen() {
+            gameRunning = false;
+            gameOver = false;
+            overlayTitle.textContent = 'Flappy Bird';
+            overlayMessage.innerHTML = 'Tap or click to jump. Avoid the pipes!';
+            startButton.textContent = 'Start Game';
+            gameOverlay.classList.remove('hidden');
+            scoreDisplay.classList.add('hidden');
+            drawGameElements(); // Draw initial state
+        }
+
+        // --- Main Game Loop ---
+        let lastFrameTime = 0;
+        function gameLoop(currentTime) {
+            const deltaTime = currentTime - lastFrameTime;
+            lastFrameTime = currentTime;
+
+            if (gameRunning) {
+                // Clear the canvas
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                // Update game elements
+                updateBird();
+                updatePipes(deltaTime);
+                checkCollisions();
+
+                // Draw game elements
+                drawPipes();
+                drawGround();
+                drawBird();
+                drawScore(); // Redraw score each frame to ensure it's visible if overlay is hidden
+            }
+
+            // Request the next frame
+            animationFrameId = requestAnimationFrame(gameLoop);
+        }
+
+        function drawGameElements() {
+            // Clear the canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            // Draw initial bird and ground
+            drawGround();
+            drawBird();
+        }
+
+        // --- Event Listeners ---
+
+        // Event listener for mouse click (desktop)
+        canvas.addEventListener('click', birdJump);
+        startButton.addEventListener('click', startGame);
+
+        // Event listener for touch (mobile/iPad)
         canvas.addEventListener('touchstart', (e) => {
-            e.preventDefault(); // Prevent scrolling
-            jump();
-        }, { passive: false }); // Use passive: false for better touch control
+            e.preventDefault(); // Prevent default touch behavior like scrolling/zooming
+            birdJump();
+        }, { passive: false }); // Use passive: false for better control over touch events
 
-        // Start the game
-        gameLoop();
+        // Initialize the game on window load
+        window.onload = function() {
+            setCanvasSize(); // Set initial canvas size
+            showStartScreen(); // Display the start screen
+            // Start a passive loop to draw initial elements even before game starts
+            animationFrameId = requestAnimationFrame(drawGameElements);
+        };
+
     </script>
 </body>
 </html>
