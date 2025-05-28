@@ -2,295 +2,148 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Aim Trainer</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Basic Icy Tower Concept</title>
     <style>
-        /* General body styling */
         body {
+            margin: 0;
+            overflow: hidden; /* Prevent scrolling */
+            background-color: #333;
             display: flex;
-            flex-direction: column;
             justify-content: center;
             align-items: center;
-            min-height: 100vh; /* Full viewport height */
-            margin: 0;
-            background-color: #1a1a2e; /* Dark background */
-            color: #e0e0e0; /* Light text color */
-            font-family: 'Inter', sans-serif; /* Modern font */
-            overflow: hidden; /* Prevent scrollbars */
+            height: 100vh;
         }
-
-        /* Game container styling */
-        .game-container {
-            background-color: #2a2a4a; /* Slightly lighter dark background for container */
-            border-radius: 15px; /* Rounded corners */
-            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5); /* Soft shadow */
-            padding: 20px;
-            text-align: center;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            width: 90%; /* Responsive width */
-            max-width: 800px; /* Max width for larger screens */
-            box-sizing: border-box; /* Include padding in width */
-        }
-
-        /* Game title */
-        h1 {
-            color: #00bcd4; /* Bright cyan */
-            margin-bottom: 20px;
-            font-size: 2.5em; /* Larger title */
-            text-shadow: 0 0 10px rgba(0, 188, 212, 0.7); /* Glow effect */
-        }
-
-        /* Score and timer display */
-        .stats {
-            display: flex;
-            justify-content: space-around;
-            width: 100%;
-            margin-bottom: 20px;
-            font-size: 1.5em;
-            font-weight: bold;
-            color: #e0e0e0;
-        }
-
-        .stat-item {
-            padding: 10px 20px;
-            background-color: #3a3a5a; /* Darker background for stats */
-            border-radius: 10px;
-            box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.3); /* Inner shadow */
-        }
-
-        /* Canvas styling */
         canvas {
-            background-color: #1f1f3f; /* Darker background for canvas */
-            border: 3px solid #00bcd4; /* Cyan border */
-            border-radius: 10px;
-            display: block;
-            cursor: crosshair; /* Crosshair cursor for aiming */
-            touch-action: none; /* Disable default touch actions like scrolling/zooming */
-            width: 100%; /* Make canvas responsive */
-            height: 400px; /* Fixed height for now, will adjust dynamically if needed */
-            max-height: 70vh; /* Max height relative to viewport */
-        }
-
-        /* Button styling */
-        button {
-            background: linear-gradient(145deg, #00bcd4, #008ba3); /* Gradient background */
-            color: white;
-            border: none;
-            border-radius: 10px;
-            padding: 15px 30px;
-            font-size: 1.2em;
-            font-weight: bold;
-            margin-top: 20px;
-            cursor: pointer;
-            transition: all 0.3s ease; /* Smooth transitions */
-            box-shadow: 0 5px 15px rgba(0, 188, 212, 0.4); /* Button shadow */
-            outline: none; /* Remove outline on focus */
-        }
-
-        button:hover {
-            background: linear-gradient(145deg, #00e0ff, #00a0b8); /* Lighter gradient on hover */
-            transform: translateY(-3px); /* Lift effect */
-            box-shadow: 0 8px 20px rgba(0, 188, 212, 0.6); /* Larger shadow on hover */
-        }
-
-        button:active {
-            transform: translateY(0); /* Press effect */
-            box-shadow: 0 2px 5px rgba(0, 188, 212, 0.4); /* Smaller shadow on active */
-        }
-
-        /* Game over message */
-        .game-over-message {
-            font-size: 2em;
-            color: #ff4d4d; /* Red for game over */
-            margin-top: 20px;
-            font-weight: bold;
-            text-shadow: 0 0 10px rgba(255, 77, 77, 0.7);
-            display: none; /* Hidden by default */
-        }
-
-        /* Responsive adjustments */
-        @media (max-width: 600px) {
-            h1 {
-                font-size: 1.8em;
-            }
-
-            .stats {
-                font-size: 1.2em;
-                flex-direction: column; /* Stack stats on small screens */
-                gap: 10px; /* Space between stacked stats */
-            }
-
-            .stat-item {
-                width: 80%; /* Make stat items wider */
-                margin: 0 auto; /* Center them */
-            }
-
-            button {
-                padding: 12px 25px;
-                font-size: 1em;
-            }
-
-            canvas {
-                height: 300px; /* Adjust canvas height for smaller screens */
-            }
+            background-color: #555;
+            border: 2px solid #ccc;
         }
     </style>
 </head>
 <body>
-    <div class="game-container">
-        <h1>Aim Trainer</h1>
-        <div class="stats">
-            <div class="stat-item">Score: <span id="score">0</span></div>
-            <div class="stat-item">Time: <span id="time">30</span>s</div>
-        </div>
-        <canvas id="gameCanvas"></canvas>
-        <div id="gameOverMessage" class="game-over-message">Game Over! Your Score: <span id="finalScore">0</span></div>
-        <button id="startButton">Start Game</button>
-    </div>
+    <canvas id="gameCanvas"></canvas>
 
     <script>
-        // Get canvas and its context
+        // --- Game Setup ---
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
 
-        // Get score, time, and button elements
-        const scoreDisplay = document.getElementById('score');
-        const timeDisplay = document.getElementById('time');
-        const startButton = document.getElementById('startButton');
-        const gameOverMessage = document.getElementById('gameOverMessage');
-        const finalScoreDisplay = document.getElementById('finalScore');
+        // Set canvas dimensions (adjust for iPad Pro - you'd want responsive design)
+        canvas.width = window.innerWidth > 768 ? 768 : window.innerWidth * 0.9; // Max 768px wide or 90% of screen
+        canvas.height = window.innerHeight > 1024 ? 1024 : window.innerHeight * 0.9; // Max 1024px tall or 90% of screen
 
-        // Game variables
-        let score = 0;
-        let timeLeft = 30; // Game duration in seconds
-        let gameActive = false;
-        let target = { x: 0, y: 0, radius: 20, color: '#ff4d4d' }; // Initial target properties
-        let targetInterval;
-        let gameTimer;
-
-        // Function to set canvas size based on its rendered dimensions
-        function setCanvasSize() {
-            // Get the actual rendered width and height of the canvas element as determined by CSS
-            const displayedWidth = canvas.offsetWidth;
-            const displayedHeight = canvas.offsetHeight;
-
-            // Set the internal drawing buffer dimensions to match the displayed dimensions
-            canvas.width = displayedWidth;
-            canvas.height = displayedHeight;
-
-            // Redraw everything after resizing, or clear if game is not active
-            if (gameActive) {
-                drawTarget();
-            } else {
-                ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear canvas if game is not active
-            }
-        }
-
-        // Draw target function
-        function drawTarget() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear canvas before drawing
-            ctx.beginPath();
-            ctx.arc(target.x, target.y, target.radius, 0, Math.PI * 2);
-            ctx.fillStyle = target.color;
-            ctx.fill();
-            ctx.strokeStyle = '#e0e0e0'; // White border
-            ctx.lineWidth = 2;
-            ctx.stroke();
-            ctx.closePath();
-        }
-
-        // Generate a new target position
-        function generateTarget() {
-            // Ensure target is fully within canvas boundaries
-            target.x = Math.random() * (canvas.width - target.radius * 2) + target.radius;
-            target.y = Math.random() * (canvas.height - target.radius * 2) + target.radius;
-            drawTarget();
-        }
-
-        // Handle click event on canvas
-        function handleClick(event) {
-            if (!gameActive) return;
-
-            // Get click coordinates relative to the canvas
-            const rect = canvas.getBoundingClientRect();
-            const clickX = event.clientX - rect.left;
-            const clickY = event.clientY - rect.top;
-
-            // Calculate distance from click to target center
-            const distance = Math.sqrt(
-                (clickX - target.x) ** 2 + (clickY - target.y) ** 2
-            );
-
-            // Check if click hit the target
-            if (distance < target.radius) {
-                score++;
-                scoreDisplay.textContent = score;
-                generateTarget(); // Generate new target on hit
-            } else {
-                // Optional: penalize for misses, or just do nothing
-                // score = Math.max(0, score - 1); // Example: decrement score on miss
-                // scoreDisplay.textContent = score;
-            }
-        }
-
-        // Game over function
-        function gameOver() {
-            gameActive = false;
-            clearInterval(targetInterval);
-            clearInterval(gameTimer);
-            startButton.textContent = 'Play Again';
-            startButton.style.display = 'block'; // Show the button
-            gameOverMessage.style.display = 'block'; // Show game over message
-            finalScoreDisplay.textContent = score; // Display final score
-            ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear canvas
-        }
-
-        // Start game function
-        function startGame() {
-            score = 0;
-            timeLeft = 30;
-            scoreDisplay.textContent = score;
-            timeDisplay.textContent = timeLeft;
-            startButton.style.display = 'none'; // Hide the start button
-            gameOverMessage.style.display = 'none'; // Hide game over message
-            gameActive = true;
-
-            setCanvasSize(); // Set initial canvas size
-            generateTarget(); // Generate first target
-
-            // Set interval for target disappearance/reappearance (every 1.5 seconds)
-            targetInterval = setInterval(generateTarget, 1500);
-
-            // Set game timer
-            gameTimer = setInterval(() => {
-                timeLeft--;
-                timeDisplay.textContent = timeLeft;
-                if (timeLeft <= 0) {
-                    gameOver();
-                }
-            }, 1000);
-        }
-
-        // Event listeners
-        startButton.addEventListener('click', startGame);
-        canvas.addEventListener('mousedown', handleClick); // Use mousedown for quicker response
-        canvas.addEventListener('touchstart', (e) => { // Handle touch events for mobile
-            e.preventDefault(); // Prevent scrolling/zooming
-            handleClick(e.touches[0]); // Pass the first touch point
-        }, { passive: false }); // passive: false to allow preventDefault
-
-        // Adjust canvas size on window resize
-        window.addEventListener('resize', setCanvasSize);
-
-        // Initial setup when the window loads
-        window.onload = () => {
-            setCanvasSize(); // Set canvas size initially
-            // No need to call drawTarget here, it will be called by startGame
-            // or generateTarget when the game starts.
+        // --- Game Variables ---
+        const player = {
+            x: canvas.width / 2 - 25,
+            y: canvas.height - 100,
+            width: 50,
+            height: 50,
+            color: 'skyblue',
+            velocityY: 0,
+            isJumping: false,
+            grounded: false
         };
 
+        const gravity = 0.5;
+        const jumpForce = -12; // Negative for upward movement
+
+        const platforms = [];
+        const platformWidth = 150;
+        const platformHeight = 20;
+        const platformColor = 'lime';
+
+        // Initial platforms (simple static arrangement)
+        function createInitialPlatforms() {
+            platforms.push({ x: canvas.width / 2 - 75, y: canvas.height - 50, width: platformWidth, height: platformHeight });
+            platforms.push({ x: canvas.width / 4, y: canvas.height - 200, width: platformWidth, height: platformHeight });
+            platforms.push({ x: canvas.width * 3 / 4 - platformWidth, y: canvas.height - 350, width: platformWidth, height: platformHeight });
+            platforms.push({ x: canvas.width / 2 - 75, y: canvas.height - 500, width: platformWidth, height: platformHeight });
+        }
+        createInitialPlatforms();
+
+        // --- Game Functions ---
+
+        function drawPlayer() {
+            ctx.fillStyle = player.color;
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+        }
+
+        function drawPlatforms() {
+            ctx.fillStyle = platformColor;
+            platforms.forEach(p => {
+                ctx.fillRect(p.x, p.y, p.width, p.height);
+            });
+        }
+
+        function updatePlayer() {
+            // Apply gravity
+            player.velocityY += gravity;
+            player.y += player.velocityY;
+
+            // Check for collision with bottom of canvas (game over condition in a real game)
+            if (player.y + player.height > canvas.height) {
+                player.y = canvas.height - player.height;
+                player.velocityY = 0;
+                player.grounded = true;
+                player.isJumping = false;
+            } else {
+                player.grounded = false;
+            }
+
+            // Platform collision
+            platforms.forEach(p => {
+                // Check if player is above the platform AND falling AND horizontally overlapping
+                if (player.y + player.height < p.y + p.height && // Player's bottom is above platform's bottom
+                    player.y + player.height + player.velocityY >= p.y && // Player will hit or is hitting platform top
+                    player.x < p.x + p.width &&
+                    player.x + player.width > p.x) {
+
+                    // If falling and landed on platform
+                    if (player.velocityY >= 0) {
+                        player.y = p.y - player.height; // Snap to top of platform
+                        player.velocityY = 0;
+                        player.grounded = true;
+                        player.isJumping = false;
+                    }
+                }
+            });
+        }
+
+        function jump() {
+            if (player.grounded) {
+                player.velocityY = jumpForce;
+                player.isJumping = true;
+                player.grounded = false;
+            }
+        }
+
+        // --- Game Loop ---
+        function gameLoop() {
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            updatePlayer();
+            drawPlatforms();
+            drawPlayer();
+
+            requestAnimationFrame(gameLoop); // Keep looping
+        }
+
+        // --- Event Listeners for Input ---
+
+        // Desktop click
+        canvas.addEventListener('click', () => {
+            jump();
+        });
+
+        // Mobile touch (for iPad Pro)
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault(); // Prevent scrolling
+            jump();
+        }, { passive: false }); // Use passive: false for better touch control
+
+        // Start the game
+        gameLoop();
     </script>
 </body>
 </html>
